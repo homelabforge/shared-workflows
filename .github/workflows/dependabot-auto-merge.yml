@@ -1,0 +1,59 @@
+name: Reusable Dependabot Auto-Merge
+
+# Reusable dependabot auto-merge workflow.
+# Trigger uses on: pull_request (NOT pull_request_target — security risk).
+# The actor filter ensures we only act on dependabot's own PRs.
+
+on:
+  workflow_call:
+    inputs:
+      auto-merge-patch:
+        type: boolean
+        default: true
+      auto-merge-minor:
+        type: boolean
+        default: true
+      auto-merge-major:
+        type: boolean
+        default: false
+    secrets:
+      github-token:
+        required: true
+
+jobs:
+  auto-merge:
+    name: Dependabot Auto-Merge
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Get Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@08eff52bf64351f401fb50d4972fa95b9f2c2d1b # v2.4.0
+        with:
+          github-token: ${{ secrets.github-token }}
+
+      - name: Enable auto-merge for patch updates
+        if: ${{ inputs.auto-merge-patch && steps.metadata.outputs.update-type == 'version-update:semver-patch' }}
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.github-token }}
+
+      - name: Enable auto-merge for minor updates
+        if: ${{ inputs.auto-merge-minor && steps.metadata.outputs.update-type == 'version-update:semver-minor' }}
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.github-token }}
+
+      - name: Manual review required for major updates
+        if: ${{ !inputs.auto-merge-major && steps.metadata.outputs.update-type == 'version-update:semver-major' }}
+        run: |
+          gh pr comment "$PR_URL" --body "Major version bump — manual review required."
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.github-token }}
