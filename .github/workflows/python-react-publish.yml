@@ -266,15 +266,46 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/v}
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f1-2)
+          # Standard semver pre-release: anything with `-` after patch
+          # (e.g. v2.27.0-rc1, v2.27.0-beta.1, v3.0.0-alpha).
+          # Pre-release tags publish only the exact :VERSION image — they
+          # must NOT move :latest, :MAJOR, or :MINOR away from stable.
+          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            IS_PRERELEASE=false
+          else
+            IS_PRERELEASE=true
+          fi
           {
             echo "version=$VERSION"
             echo "major=$MAJOR"
             echo "minor=$MINOR"
+            echo "is_prerelease=$IS_PRERELEASE"
           } >> "$GITHUB_OUTPUT"
 
       - name: Read bun version
         id: bun
         run: echo "version=$(cat ${{ inputs.bun-version-file }})" >> "$GITHUB_OUTPUT"
+
+      - name: Compute Docker tags
+        id: tags
+        run: |
+          # Always publish the exact :VERSION tag.
+          TAGS="ghcr.io/${{ inputs.image-name }}:${{ steps.version.outputs.version }}"
+
+          # Stable tags only update on non-pre-release builds. Pre-release
+          # users (rc/beta/alpha) pin to the exact version; production
+          # users on :latest stay on the last stable.
+          if [[ "${{ steps.version.outputs.is_prerelease }}" == "false" ]]; then
+            TAGS="$TAGS"$'\n'"ghcr.io/${{ inputs.image-name }}:latest"
+            TAGS="$TAGS"$'\n'"ghcr.io/${{ inputs.image-name }}:${{ steps.version.outputs.minor }}"
+            TAGS="$TAGS"$'\n'"ghcr.io/${{ inputs.image-name }}:${{ steps.version.outputs.major }}"
+          fi
+
+          {
+            echo "tags<<EOF"
+            echo "$TAGS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker image
         id: push
@@ -282,11 +313,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: |
-            ghcr.io/${{ inputs.image-name }}:latest
-            ghcr.io/${{ inputs.image-name }}:${{ steps.version.outputs.version }}
-            ghcr.io/${{ inputs.image-name }}:${{ steps.version.outputs.minor }}
-            ghcr.io/${{ inputs.image-name }}:${{ steps.version.outputs.major }}
+          tags: ${{ steps.tags.outputs.tags }}
           build-args: |
             BUN_VERSION=${{ steps.bun.outputs.version }}
           cache-from: type=gha
