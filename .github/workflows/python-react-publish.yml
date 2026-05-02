@@ -344,11 +344,12 @@ jobs:
     runs-on: ${{ inputs.runner-os }}
     needs: [docker]
     # The docker job uses `if: always() && ...` to handle the
-    # api-types-freshness-skipped case. That changes its evaluation
-    # semantics: downstream jobs with the implicit `if: success()` are
-    # treated as skipped regardless of docker's actual result. Make the
-    # success gate explicit so release runs whenever docker succeeded.
-    if: needs.docker.result == 'success'
+    # api-types-freshness-skipped case. That marks docker as a
+    # conditional job, which causes downstream `needs:` evaluation to
+    # treat docker's "success" differently from an unconditional job.
+    # Use `always() &&` here too so this if: always evaluates, and
+    # gate explicitly on docker's actual result.
+    if: always() && needs.docker.result == 'success'
     permissions:
       contents: write
       packages: read
