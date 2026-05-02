@@ -238,6 +238,16 @@ jobs:
     name: Build and Push Docker Image
     runs-on: ${{ inputs.runner-os }}
     needs: [test-backend, test-frontend, api-types-freshness]
+    # api-types-freshness is conditional on inputs.enable-api-freshness-check.
+    # When that input is false the job is skipped — and a skipped need would
+    # also skip docker without this guard. Allow docker to proceed when
+    # api-types-freshness is either successful OR skipped, while still
+    # blocking on real test failures.
+    if: |
+      always()
+      && needs.test-backend.result == 'success'
+      && needs.test-frontend.result == 'success'
+      && (needs.api-types-freshness.result == 'success' || needs.api-types-freshness.result == 'skipped')
     permissions:
       contents: read
       packages: write
