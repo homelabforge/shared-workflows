@@ -37,22 +37,43 @@ concurrency:
 
 jobs:
   ci:
-    uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.0.0
+    uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.2.0
     with:
       enable-translations: true            # mygarage
       enable-bootstrap-token: true         # vulnforge
       enable-e2e: false                    # familycircle
+      enable-pg-migrations: true           # mygarage (>=v1.2.0)
       security-tripwire-script: .github/scripts/security-tripwire.sh
 ```
 
 Per-repo flags:
 
-| Repo | enable-e2e | enable-translations | enable-bootstrap-token | tripwire-script |
-|---|---|---|---|---|
-| familycircle | false | (default) | (default) | `.github/scripts/security-tripwire.sh` |
-| mygarage | (default) | true | (default) | `.github/scripts/security-tripwire.sh` |
-| tidewatch | (default) | (default) | (default) | `.github/scripts/security-tripwire.sh` |
-| vulnforge | (default) | (default) | true | `.github/scripts/security-tripwire.sh` |
+| Repo | enable-e2e | enable-translations | enable-bootstrap-token | enable-pg-migrations | tripwire-script |
+|---|---|---|---|---|---|
+| familycircle | false | (default) | (default) | (default) | `.github/scripts/security-tripwire.sh` |
+| mygarage | (default) | true | (default) | true | `.github/scripts/security-tripwire.sh` |
+| tidewatch | (default) | (default) | (default) | (default) | `.github/scripts/security-tripwire.sh` |
+| vulnforge | (default) | (default) | true | (default) | `.github/scripts/security-tripwire.sh` |
+
+### `enable-pg-migrations` (v1.2.0+)
+
+When `true`, runs the consumer's `docker-compose.test.yml` stack and
+exercises `pytest tests/migrations/` against a real PostgreSQL sidecar
+(in addition to the SQLite path the standard `test-backend` job uses).
+
+This is the path that catches PG dialect bugs in migrations — `DATETIME`
+vs `TIMESTAMP`, `ADD CONSTRAINT IF NOT EXISTS`, etc. — that the SQLite
+test path silently passes. mygarage adopted this in v2.27.0-rc2 after
+a real rc1 incident; other consumers can opt in once they ship a
+`docker-compose.test.yml` and a `backend/Dockerfile.test`.
+
+Customization (rare — defaults match the mygarage pattern):
+
+| Input | Default | Purpose |
+|---|---|---|
+| `pg-migrations-compose-file` | `docker-compose.test.yml` | Compose file path |
+| `pg-migrations-service` | `mygarage-test` | Compose service that runs pytest |
+| `pg-migrations-pytest-path` | `tests/migrations/` | What pytest invokes |
 
 ### Publish (consumer `.github/workflows/publish.yml`)
 
