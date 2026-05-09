@@ -1,0 +1,21 @@
+version: 2
+
+updates:
+  # GitHub Actions used by the reusable workflows in this repo.
+  # Keeps the SHA pins in .github/workflows/*.yml current so that all
+  # consumer repos picking up a tagged release inherit fresh actions.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      actions-patch-minor:
+        update-types:
+          - "minor"
+          - "patch"
