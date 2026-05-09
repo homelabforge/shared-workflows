@@ -307,7 +307,7 @@ jobs:
 
       - name: Wait for postgres healthy
         run: |
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             health=$(docker compose -f "${{ inputs.pg-migrations-compose-file }}" \
               -p ${{ inputs.pg-migrations-service }} ps postgres-test \
               --format '{{.Health}}' || true)
