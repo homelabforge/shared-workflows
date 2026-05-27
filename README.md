@@ -9,14 +9,15 @@ released tag — never `@main`, never a branch.
 
 | File | Purpose | Used by |
 |---|---|---|
-| `python-react-ci.yml` | CI: ruff + pyright + pytest + frontend gates + E2E + api-freshness + docker-build-test | familycircle, mygarage, tidewatch, vulnforge |
+| `python-react-ci.yml` | CI: ruff + pyright + pytest + frontend gates + E2E + api-freshness + docker-build-test | collectionsync, familycircle, myhealth, mygarage, tidewatch, vulnforge |
 | `python-react-publish.yml` | Tag publish: test → docker push → release | same |
 | `codeql.yml` | CodeQL python + javascript matrix | same |
 | `dependabot-auto-merge.yml` | Dependabot PR auto-merge (patch + minor) | same |
 
-CollectionSync is intentionally not standardized on these (private repo,
-different release/codeql stack). MyGarage's `translations.yml` stays
-repo-local — single consumer, doesn't justify extraction.
+MyFinances is the one homelab Python+React build that stays standalone
+(repo-local workflows, no shared-workflows pin). MyGarage's
+`translations.yml` also stays repo-local — single consumer, doesn't
+justify extraction.
 
 ## Wrapper recipes
 
@@ -37,23 +38,25 @@ concurrency:
 
 jobs:
   ci:
-    uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.2.0
+    uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.3.1
     with:
       enable-translations: true            # mygarage
       enable-bootstrap-token: true         # vulnforge
-      enable-e2e: false                    # familycircle
+      enable-e2e: false                    # familycircle, collectionsync, myhealth
       enable-pg-migrations: true           # mygarage (>=v1.2.0)
       security-tripwire-script: .github/scripts/security-tripwire.sh
 ```
 
-Per-repo flags:
+Per-repo flags (actual values in production):
 
-| Repo | enable-e2e | enable-translations | enable-bootstrap-token | enable-pg-migrations | tripwire-script |
-|---|---|---|---|---|---|
-| familycircle | false | (default) | (default) | (default) | `.github/scripts/security-tripwire.sh` |
-| mygarage | (default) | true | (default) | true | `.github/scripts/security-tripwire.sh` |
-| tidewatch | (default) | (default) | (default) | (default) | `.github/scripts/security-tripwire.sh` |
-| vulnforge | (default) | (default) | true | (default) | `.github/scripts/security-tripwire.sh` |
+| Repo | enable-e2e | enable-translations | enable-bootstrap-token | enable-pg-migrations | enable-api-freshness-check | tripwire-script |
+|---|---|---|---|---|---|---|
+| collectionsync | false | (default) | (default) | (default) | (default) | (none) |
+| familycircle | false | (default) | (default) | (default) | (default) | `.github/scripts/security-tripwire.sh` |
+| myhealth | false | (default) | (default) | (default) | false | (none) |
+| mygarage | (default) | true | (default) | true | (default) | `.github/scripts/security-tripwire.sh` |
+| tidewatch | (default) | (default) | (default) | (default) | (default) | `.github/scripts/security-tripwire.sh` |
+| vulnforge | (default) | (default) | true | (default) | (default) | `.github/scripts/security-tripwire.sh` |
 
 ### `enable-pg-migrations` (v1.2.0+)
 
@@ -73,7 +76,7 @@ Customization (rare — defaults match the mygarage pattern):
 |---|---|---|
 | `pg-migrations-compose-file` | `docker-compose.test.yml` | Compose file path |
 | `pg-migrations-service` | `mygarage-test` | Compose service that runs pytest |
-| `pg-migrations-pytest-path` | `tests/migrations/` | What pytest invokes |
+| `pg-migrations-pytest-path` | `tests/migrations/` | What pytest invokes (mygarage overrides to also include `tests/integration/`) |
 
 ### Publish (consumer `.github/workflows/publish.yml`)
 
@@ -86,17 +89,21 @@ on:
 
 jobs:
   publish:
-    uses: homelabforge/shared-workflows/.github/workflows/python-react-publish.yml@v1.0.0
+    uses: homelabforge/shared-workflows/.github/workflows/python-react-publish.yml@v1.3.1
     with:
       enable-translations: true            # mygarage
       enable-bootstrap-token: true         # vulnforge
-      enable-e2e: false                    # familycircle
+      enable-e2e: false                    # familycircle, collectionsync, myhealth
       security-tripwire-script: .github/scripts/security-tripwire.sh
       image-name: homelabforge/<repo>      # e.g. homelabforge/tidewatch
       release-name-prefix: '<Repo> v'      # e.g. 'TideWatch v'
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+Pre-release tags (`vX.Y.Z-rcN`, `vX.Y.Z-betaN`, `vX.Y.Z-alphaN`) publish
+only the exact `:VERSION` image — `:latest`, `:MAJOR`, `:MINOR` stay
+pinned to the last stable. Use plain `vX.Y.Z` for stable releases.
 
 ### CodeQL (consumer `.github/workflows/codeql.yml`)
 
@@ -113,7 +120,7 @@ on:
 
 jobs:
   codeql:
-    uses: homelabforge/shared-workflows/.github/workflows/codeql.yml@v1.0.0
+    uses: homelabforge/shared-workflows/.github/workflows/codeql.yml@v1.3.1
     with:
       python-extension-pack: homelabforge/tidewatch-models  # tidewatch only
 ```
@@ -128,7 +135,7 @@ on:
 
 jobs:
   auto-merge:
-    uses: homelabforge/shared-workflows/.github/workflows/dependabot-auto-merge.yml@v1.0.0
+    uses: homelabforge/shared-workflows/.github/workflows/dependabot-auto-merge.yml@v1.3.1
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -143,17 +150,26 @@ for emergency overrides — leave empty to use the file.
 
 `templates/bin/ci-check` is a copy-into-your-repo template that gives
 local-dev parity with these workflows. Per-repo deltas live in a config
-block at the top of the script.
+block at the top of the script. Consumer copies drift intentionally as
+each repo customizes its own block — re-syncing wholesale would clobber
+those edits.
 
 ## Versioning
 
 Tag via semver: `v1.0.0`, `v1.0.1`, …
-- Patch: bug fixes, no behavior change
+- Patch: bug fixes, action SHA bumps, no behavior change
 - Minor: new optional inputs, new optional jobs, default-preserving
 - Major: breaking input/job changes
 
-Cut RC tags first (`v1.x.0-rc.1`) and canary on MyGarage before promoting.
+For risky changes, cut RC tags first (`v1.x.0-rc1`) and canary on MyGarage
+before promoting.
 
-## Linting
+See `CHANGELOG.md` for the per-release history.
 
-`actionlint` runs on every push via `.github/workflows/lint.yml`.
+## Self-hosted dogfooding
+
+This repo consumes its own reusable workflows:
+- `.github/workflows/dependabot-auto-merge.yml` calls the reusable auto-merge
+  at `@main` (the only repo where `@main` is acceptable — it can't lag itself).
+- `.github/workflows/lint.yml` runs `actionlint` on every push as a self-check
+  against malformed reusable workflow syntax.
