@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-05-28
+
 ### Changed
 - Extracted the shared backend/frontend/e2e/api-freshness matrix into an internal
   `_python-react-tests.yml` building block that both `python-react-ci.yml` and
