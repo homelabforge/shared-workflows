@@ -5,7 +5,7 @@ name: Reusable Python+React CI
 #
 #   jobs:
 #     ci:
-#       uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.0.0
+#       uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.4.0
 #       with:
 #         enable-translations: true   # mygarage only
 #         enable-bootstrap-token: true # vulnforge only
@@ -13,6 +13,11 @@ name: Reusable Python+React CI
 #
 # Inputs default to the homelab-standard values. Bun version comes from
 # the consumer repo's .bun-version file (single source of truth).
+#
+# The backend/frontend/e2e/api-freshness matrix lives in the shared
+# _python-react-tests.yml building block (called as the `tests` job
+# below) so CI and publish stay in lockstep. CI-specific jobs
+# (pg-migrations, docker-build-test) stay here.
 
 on:
   workflow_call:
@@ -66,197 +71,19 @@ permissions:
   contents: read
 
 jobs:
-  test-backend:
-    name: Backend Tests
-    runs-on: ${{ inputs.runner-os }}
-    timeout-minutes: 25
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
-        with:
-          python-version: ${{ inputs.python-version }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8
-        with:
-          enable-cache: true
-          cache-dependency-glob: 'backend/uv.lock'
-
-      - name: Install dependencies
-        run: |
-          cd backend
-          uv sync --frozen --all-extras
-
-      - name: Run ruff linter
-        run: cd backend && uv run ruff check .
-
-      - name: Run ruff formatter check
-        run: cd backend && uv run ruff format --check .
-
-      - name: Run pyright type checking
-        run: cd backend && PYTHONPATH=. uv run pyright
-
-      - name: Security tripwire
-        if: inputs.security-tripwire-script != ''
-        run: bash "${{ inputs.security-tripwire-script }}"
-
-      - name: Run pytest
-        run: |
-          cd backend
-          timeout 25m uv run pytest tests/ -v --tb=short
-
-  test-frontend:
-    name: Frontend Tests
-    runs-on: ${{ inputs.runner-os }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Bun (from version-file)
-        if: inputs.bun-version == ''
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: ${{ inputs.bun-version-file }}
-
-      - name: Set up Bun (from explicit override)
-        if: inputs.bun-version != ''
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: ${{ inputs.bun-version }}
-
-      - name: Install dependencies
-        run: |
-          cd frontend
-          if [ "${{ github.actor }}" = "dependabot[bot]" ]; then bun install; else bun install --frozen-lockfile; fi
-
-      - name: Run TypeScript type checking
-        run: cd frontend && bun run type-check
-
-      - name: Run linter
-        run: cd frontend && bun run lint
-
-      - name: Validate translation keys
-        if: inputs.enable-translations
-        run: cd frontend && bun run validate:translations
-
-      - name: Run tests
-        run: cd frontend && bun run test:run
-
-  test-e2e:
-    name: E2E Tests
-    if: inputs.enable-e2e
-    runs-on: ${{ inputs.runner-os }}
-    timeout-minutes: 20
-    needs: [test-backend, test-frontend]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
-        with:
-          python-version: ${{ inputs.python-version }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8
-        with:
-          enable-cache: true
-          cache-dependency-glob: 'backend/uv.lock'
-
-      - name: Install backend dependencies
-        run: cd backend && uv sync --frozen --all-extras
-
-      - name: Set up Bun (from version-file)
-        if: inputs.bun-version == ''
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: ${{ inputs.bun-version-file }}
-
-      - name: Set up Bun (from explicit override)
-        if: inputs.bun-version != ''
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: ${{ inputs.bun-version }}
-
-      - name: Install frontend dependencies
-        run: |
-          cd frontend
-          if [ "${{ github.actor }}" = "dependabot[bot]" ]; then bun install; else bun install --frozen-lockfile; fi
-
-      - name: Install Playwright browsers
-        run: cd frontend && bunx playwright install chromium --with-deps
-
-      - name: Run E2E tests
-        run: cd frontend && bun run e2e
-        env:
-          CI: true
-          VULNFORGE_BOOTSTRAP_TOKEN: ${{ inputs.enable-bootstrap-token && 'e2e-ci-test-token' || '' }}
-
-      - name: Upload Playwright report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        if: ${{ !cancelled() }}
-        with:
-          name: playwright-report
-          path: frontend/playwright-report/
-          retention-days: 14
-
-      - name: Upload test results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        if: ${{ !cancelled() }}
-        with:
-          name: playwright-results
-          path: frontend/test-results/
-          retention-days: 7
-
-  api-types-freshness:
-    name: API Types Freshness
-    if: inputs.enable-api-freshness-check
-    runs-on: ${{ inputs.runner-os }}
-    needs: [test-backend]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
-        with:
-          python-version: ${{ inputs.python-version }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8
-        with:
-          enable-cache: true
-          cache-dependency-glob: 'backend/uv.lock'
-
-      - name: Install backend dependencies
-        run: cd backend && uv sync --frozen --all-extras
-
-      - name: Set up Bun (from version-file)
-        if: inputs.bun-version == ''
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: ${{ inputs.bun-version-file }}
-
-      - name: Set up Bun (from explicit override)
-        if: inputs.bun-version != ''
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: ${{ inputs.bun-version }}
-
-      - name: Install frontend dependencies
-        run: |
-          cd frontend
-          if [ "${{ github.actor }}" = "dependabot[bot]" ]; then bun install; else bun install --frozen-lockfile; fi
-
-      - name: Check API types freshness
-        run: cd frontend && bun run check:api-freshness
+  tests:
+    # backend + frontend + e2e + api-freshness, shared with publish.
+    uses: ./.github/workflows/_python-react-tests.yml
+    with:
+      python-version: ${{ inputs.python-version }}
+      bun-version-file: ${{ inputs.bun-version-file }}
+      bun-version: ${{ inputs.bun-version }}
+      enable-e2e: ${{ inputs.enable-e2e }}
+      enable-translations: ${{ inputs.enable-translations }}
+      enable-bootstrap-token: ${{ inputs.enable-bootstrap-token }}
+      enable-api-freshness-check: ${{ inputs.enable-api-freshness-check }}
+      runner-os: ${{ inputs.runner-os }}
+      security-tripwire-script: ${{ inputs.security-tripwire-script }}
 
   pg-migrations:
     # Why this job exists:
@@ -278,7 +105,6 @@ jobs:
     if: inputs.enable-pg-migrations
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 15
-    needs: [test-backend]
 
     steps:
       - name: Checkout code
@@ -341,6 +167,7 @@ jobs:
   docker-build-test:
     name: Docker Build Test
     runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: 20
     env:
       BUILDKIT_PROGRESS: plain
 

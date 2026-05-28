@@ -32,7 +32,9 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ${{ inputs.runner-os }}
-    timeout-minutes: 360
+    # build-mode: none scans source only; no language toolchain or
+    # dependency install runs, so these analyses finish well under an hour.
+    timeout-minutes: 45
     permissions:
       security-events: write
       contents: read
@@ -52,45 +54,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Set up Python
-        if: matrix.language == 'python'
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
-        with:
-          python-version: ${{ inputs.python-version }}
-
-      - name: Install Python dependencies
-        if: matrix.language == 'python'
-        run: |
-          cd backend
-          pip install --upgrade pip
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          elif [ -f pyproject.toml ]; then
-            pip install -e .
-          fi
-
-      - name: Set up Bun (from version-file)
-        if: matrix.language == 'javascript' && inputs.bun-version == ''
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: ${{ inputs.bun-version-file }}
-
-      - name: Set up Bun (from explicit override)
-        if: matrix.language == 'javascript' && inputs.bun-version != ''
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: ${{ inputs.bun-version }}
-
-      - name: Install JS dependencies
-        if: matrix.language == 'javascript'
-        run: |
-          cd frontend
-          if [ "${{ github.actor }}" = "dependabot[bot]" ]; then bun install; else bun install --frozen-lockfile; fi
+      # No language setup / dependency install: CodeQL for Python and
+      # JavaScript uses build-mode: none, which scans source directly.
+      # Dependency installation has had no effect on Python results since
+      # CodeQL 2.16 (Jan 2024), so installing it only burned runner time.
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4
         with:
           languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
           queries: security-extended,security-and-quality
           config-file: ${{ inputs.codeql-config-file }}
           source-root: ${{ matrix.language == 'python' && 'backend' || 'frontend' }}

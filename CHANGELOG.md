@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Extracted the shared backend/frontend/e2e/api-freshness matrix into an internal
+  `_python-react-tests.yml` building block that both `python-react-ci.yml` and
+  `python-react-publish.yml` call — eliminates ~150 lines of duplicated job YAML
+  and the CI/publish drift it caused. No consumer-facing input or behavior change.
+- Publish workflow's `docker`/`release` gates simplified to plain `needs:` — a
+  skipped optional job no longer fails the shared `tests` job, so the previous
+  `always() && needs.*.result == 'success'` guards are no longer required.
+- CodeQL: dropped the per-language toolchain setup and dependency-install steps.
+  `build-mode: none` scans source directly and Python dependency installation has
+  had no effect on results since CodeQL 2.16 (Jan 2024); `build-mode` is now wired
+  through to the `init` action. Analysis `timeout-minutes` lowered from 360 to 45.
+- Added explicit `timeout-minutes` to the frontend, api-freshness, docker-build-test,
+  and publish `docker`/`release` jobs (previously defaulted to the 6-hour ceiling).
+  Backend pytest's inner `timeout` lowered 25m → 20m so it reports before the job cap.
+
 ## [1.3.1] - 2026-05-27
 
 ### Changed

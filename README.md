@@ -9,8 +9,9 @@ released tag — never `@main`, never a branch.
 
 | File | Purpose | Used by |
 |---|---|---|
-| `python-react-ci.yml` | CI: ruff + pyright + pytest + frontend gates + E2E + api-freshness + docker-build-test | collectionsync, familycircle, myhealth, mygarage, tidewatch, vulnforge |
-| `python-react-publish.yml` | Tag publish: test → docker push → release | same |
+| `python-react-ci.yml` | CI: shared test suite + pg-migrations + docker-build-test | collectionsync, familycircle, myhealth, mygarage, tidewatch, vulnforge |
+| `python-react-publish.yml` | Tag publish: shared test suite → docker push → release | same |
+| `_python-react-tests.yml` | Internal building block: ruff + pyright + pytest + frontend gates + E2E + api-freshness. Called by CI and publish — not for direct consumer use | (internal) |
 | `codeql.yml` | CodeQL python + javascript matrix | same |
 | `dependabot-auto-merge.yml` | Dependabot PR auto-merge (patch + minor) | same |
 

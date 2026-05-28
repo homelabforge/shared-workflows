@@ -1,11 +1,17 @@
 name: Reusable Python+React Publish
 
 # Reusable tag-triggered publish workflow.
-# Sequencing: test-* → docker → release
-# - All test-* jobs must pass before docker push
+# Sequencing: tests → docker → release
+# - The shared test suite (backend/frontend/e2e/api-freshness) must pass
+#   before docker push
 # - docker push must succeed before release creation
 # This guarantees: a tag never publishes a GitHub release without a matching
 # image in GHCR. If the docker push fails, no release is created.
+#
+# The test matrix is the shared _python-react-tests.yml building block, so
+# CI and publish run the identical gates. A skipped optional job (e.g.
+# api-freshness when disabled) does not fail the reusable `tests` job, so
+# the downstream `needs:` here is a plain dependency — no always() guards.
 
 on:
   workflow_call:
@@ -52,202 +58,28 @@ permissions:
   contents: read
 
 jobs:
-  test-backend:
-    name: Backend Tests
-    runs-on: ${{ inputs.runner-os }}
-    timeout-minutes: 25
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
-        with:
-          python-version: ${{ inputs.python-version }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8
-        with:
-          enable-cache: true
-          cache-dependency-glob: 'backend/uv.lock'
-
-      - name: Install dependencies
-        run: cd backend && uv sync --frozen --all-extras
-
-      - name: Run ruff linter
-        run: cd backend && uv run ruff check .
-
-      - name: Run ruff formatter check
-        run: cd backend && uv run ruff format --check .
-
-      - name: Run pyright type checking
-        run: cd backend && PYTHONPATH=. uv run pyright
-
-      - name: Security tripwire
-        if: inputs.security-tripwire-script != ''
-        run: bash "${{ inputs.security-tripwire-script }}"
-
-      - name: Run pytest
-        run: cd backend && timeout 25m uv run pytest tests/ -v --tb=short
-
-  test-frontend:
-    name: Frontend Tests
-    runs-on: ${{ inputs.runner-os }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Bun (from version-file)
-        if: inputs.bun-version == ''
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: ${{ inputs.bun-version-file }}
-
-      - name: Set up Bun (from explicit override)
-        if: inputs.bun-version != ''
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: ${{ inputs.bun-version }}
-
-      - name: Install dependencies
-        run: cd frontend && bun install --frozen-lockfile
-
-      - name: Run TypeScript type checking
-        run: cd frontend && bun run type-check
-
-      - name: Run linter
-        run: cd frontend && bun run lint
-
-      - name: Validate translation keys
-        if: inputs.enable-translations
-        run: cd frontend && bun run validate:translations
-
-      - name: Run tests
-        run: cd frontend && bun run test:run
-
-  test-e2e:
-    name: E2E Tests
-    if: inputs.enable-e2e
-    runs-on: ${{ inputs.runner-os }}
-    timeout-minutes: 20
-    needs: [test-backend, test-frontend]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
-        with:
-          python-version: ${{ inputs.python-version }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8
-        with:
-          enable-cache: true
-          cache-dependency-glob: 'backend/uv.lock'
-
-      - name: Install backend dependencies
-        run: cd backend && uv sync --frozen --all-extras
-
-      - name: Set up Bun (from version-file)
-        if: inputs.bun-version == ''
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: ${{ inputs.bun-version-file }}
-
-      - name: Set up Bun (from explicit override)
-        if: inputs.bun-version != ''
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: ${{ inputs.bun-version }}
-
-      - name: Install frontend dependencies
-        run: cd frontend && bun install --frozen-lockfile
-
-      - name: Install Playwright browsers
-        run: cd frontend && bunx playwright install chromium --with-deps
-
-      - name: Run E2E tests
-        run: cd frontend && bun run e2e
-        env:
-          CI: true
-          VULNFORGE_BOOTSTRAP_TOKEN: ${{ inputs.enable-bootstrap-token && 'e2e-ci-test-token' || '' }}
-
-      - name: Upload Playwright report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        if: ${{ !cancelled() }}
-        with:
-          name: playwright-report
-          path: frontend/playwright-report/
-          retention-days: 14
-
-      - name: Upload test results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        if: ${{ !cancelled() }}
-        with:
-          name: playwright-results
-          path: frontend/test-results/
-          retention-days: 7
-
-  api-types-freshness:
-    name: API Types Freshness
-    if: inputs.enable-api-freshness-check
-    runs-on: ${{ inputs.runner-os }}
-    needs: [test-backend]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
-        with:
-          python-version: ${{ inputs.python-version }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8
-        with:
-          enable-cache: true
-          cache-dependency-glob: 'backend/uv.lock'
-
-      - name: Install backend dependencies
-        run: cd backend && uv sync --frozen --all-extras
-
-      - name: Set up Bun (from version-file)
-        if: inputs.bun-version == ''
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: ${{ inputs.bun-version-file }}
-
-      - name: Set up Bun (from explicit override)
-        if: inputs.bun-version != ''
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: ${{ inputs.bun-version }}
-
-      - name: Install frontend dependencies
-        run: cd frontend && bun install --frozen-lockfile
-
-      - name: Check API types freshness
-        run: cd frontend && bun run check:api-freshness
+  tests:
+    # backend + frontend + e2e + api-freshness, shared with CI.
+    uses: ./.github/workflows/_python-react-tests.yml
+    with:
+      python-version: ${{ inputs.python-version }}
+      bun-version-file: ${{ inputs.bun-version-file }}
+      bun-version: ${{ inputs.bun-version }}
+      enable-e2e: ${{ inputs.enable-e2e }}
+      enable-translations: ${{ inputs.enable-translations }}
+      enable-bootstrap-token: ${{ inputs.enable-bootstrap-token }}
+      enable-api-freshness-check: ${{ inputs.enable-api-freshness-check }}
+      runner-os: ${{ inputs.runner-os }}
+      security-tripwire-script: ${{ inputs.security-tripwire-script }}
 
   docker:
     name: Build and Push Docker Image
     runs-on: ${{ inputs.runner-os }}
-    needs: [test-backend, test-frontend, api-types-freshness]
-    # api-types-freshness is conditional on inputs.enable-api-freshness-check.
-    # When that input is false the job is skipped — and a skipped need would
-    # also skip docker without this guard. Allow docker to proceed when
-    # api-types-freshness is either successful OR skipped, while still
-    # blocking on real test failures.
-    if: |
-      always()
-      && needs.test-backend.result == 'success'
-      && needs.test-frontend.result == 'success'
-      && (needs.api-types-freshness.result == 'success' || needs.api-types-freshness.result == 'skipped')
+    timeout-minutes: 30
+    # Plain dependency: the reusable `tests` job succeeds even when an
+    # optional inner job is skipped, so docker runs iff every gate that
+    # actually ran passed. No always()/result juggling needed.
+    needs: [tests]
     permissions:
       contents: read
       packages: write
@@ -342,14 +174,8 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: 10
     needs: [docker]
-    # The docker job uses `if: always() && ...` to handle the
-    # api-types-freshness-skipped case. That marks docker as a
-    # conditional job, which causes downstream `needs:` evaluation to
-    # treat docker's "success" differently from an unconditional job.
-    # Use `always() &&` here too so this if: always evaluates, and
-    # gate explicitly on docker's actual result.
-    if: always() && needs.docker.result == 'success'
     permissions:
       contents: write
       packages: read
