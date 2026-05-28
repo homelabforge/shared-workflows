@@ -4,8 +4,11 @@ name: Self Auto-Merge
 # workflow so dependabot PRs against shared-workflows itself merge without
 # manual review.
 #
-# Pinned to @main because shared-workflows can't lag itself — every OTHER
-# repo MUST pin to a released tag.
+# Calls the reusable by LOCAL path (./), not the full owner/repo@main path.
+# A full same-repo reusable reference startup-fails on pull_request events;
+# the local path resolves to the same commit as this caller, so it never
+# lags itself, and is GitHub's documented pattern for same-repo reusables.
+# (External consumers still MUST pin a released tag — that rule is for them.)
 #
 # Distinct filename from the reusable workflow (dependabot-auto-merge.yml)
 # to avoid name collision with the file consumers call by path.
@@ -15,6 +18,6 @@ on:
 
 jobs:
   auto-merge:
-    uses: homelabforge/shared-workflows/.github/workflows/dependabot-auto-merge.yml@main
+    uses: ./.github/workflows/dependabot-auto-merge.yml
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
