@@ -103,6 +103,11 @@ jobs:
     #   migration's SQL for real.
     name: PostgreSQL Migration Tests
     if: inputs.enable-pg-migrations
+    # Gate on the shared suite. Was needs: [test-backend] before the
+    # extraction; test-backend is no longer addressable from here, so gate
+    # on the aggregate tests job instead — otherwise PG migration tests run
+    # even when backend lint/type/unit tests have already failed.
+    needs: [tests]
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 15
 

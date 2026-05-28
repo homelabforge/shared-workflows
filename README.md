@@ -9,16 +9,31 @@ released tag — never `@main`, never a branch.
 
 | File | Purpose | Used by |
 |---|---|---|
-| `python-react-ci.yml` | CI: shared test suite + pg-migrations + docker-build-test | collectionsync, familycircle, myhealth, mygarage, tidewatch, vulnforge |
+| `python-react-ci.yml` | CI: shared test suite + pg-migrations + docker-build-test | familycircle, mygarage, tidewatch, vulnforge |
 | `python-react-publish.yml` | Tag publish: shared test suite → docker push → release | same |
 | `_python-react-tests.yml` | Internal building block: ruff + pyright + pytest + frontend gates + E2E + api-freshness. Called by CI and publish — not for direct consumer use | (internal) |
 | `codeql.yml` | CodeQL python + javascript matrix | same |
 | `dependabot-auto-merge.yml` | Dependabot PR auto-merge (patch + minor) | same |
 
-MyFinances is the one homelab Python+React build that stays standalone
-(repo-local workflows, no shared-workflows pin). MyGarage's
-`translations.yml` also stays repo-local — single consumer, doesn't
-justify extraction.
+MyGarage's `translations.yml` stays repo-local — single consumer,
+doesn't justify extraction.
+
+## Required status checks
+
+Consumers wrap these with a job named `ci` (and `codeql`), so check contexts are
+named `<job> / <name>`. The test-suite jobs run inside the nested
+`_python-react-tests.yml`, so they report one level deeper:
+
+- `ci / tests / Backend Tests`
+- `ci / tests / Frontend Tests`
+- `ci / tests / E2E Tests`
+- `ci / tests / API Types Freshness`
+
+The CI-local jobs keep the flat form: `ci / Docker Build Test`,
+`ci / PostgreSQL Migration Tests`. CodeQL reports `codeql / Analyze (python)` and
+`codeql / Analyze (javascript)`. When adopting or upgrading, update each repo's
+branch-protection required-check contexts to match — a renamed-but-still-required
+check blocks PRs indefinitely.
 
 ## Wrapper recipes
 
@@ -43,7 +58,7 @@ jobs:
     with:
       enable-translations: true            # mygarage
       enable-bootstrap-token: true         # vulnforge
-      enable-e2e: false                    # familycircle, collectionsync, myhealth
+      enable-e2e: false                    # familycircle
       enable-pg-migrations: true           # mygarage (>=v1.2.0)
       security-tripwire-script: .github/scripts/security-tripwire.sh
 ```
@@ -52,9 +67,7 @@ Per-repo flags (actual values in production):
 
 | Repo | enable-e2e | enable-translations | enable-bootstrap-token | enable-pg-migrations | enable-api-freshness-check | tripwire-script |
 |---|---|---|---|---|---|---|
-| collectionsync | false | (default) | (default) | (default) | (default) | (none) |
 | familycircle | false | (default) | (default) | (default) | (default) | `.github/scripts/security-tripwire.sh` |
-| myhealth | false | (default) | (default) | (default) | false | (none) |
 | mygarage | (default) | true | (default) | true | (default) | `.github/scripts/security-tripwire.sh` |
 | tidewatch | (default) | (default) | (default) | (default) | (default) | `.github/scripts/security-tripwire.sh` |
 | vulnforge | (default) | (default) | true | (default) | (default) | `.github/scripts/security-tripwire.sh` |
@@ -94,7 +107,7 @@ jobs:
     with:
       enable-translations: true            # mygarage
       enable-bootstrap-token: true         # vulnforge
-      enable-e2e: false                    # familycircle, collectionsync, myhealth
+      enable-e2e: false                    # familycircle
       security-tripwire-script: .github/scripts/security-tripwire.sh
       image-name: homelabforge/<repo>      # e.g. homelabforge/tidewatch
       release-name-prefix: '<Repo> v'      # e.g. 'TideWatch v'

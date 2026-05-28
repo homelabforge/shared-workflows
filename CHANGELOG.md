@@ -10,11 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Extracted the shared backend/frontend/e2e/api-freshness matrix into an internal
   `_python-react-tests.yml` building block that both `python-react-ci.yml` and
-  `python-react-publish.yml` call — eliminates ~150 lines of duplicated job YAML
-  and the CI/publish drift it caused. No consumer-facing input or behavior change.
+  `python-react-publish.yml` call — eliminates ~150 lines of duplicated job YAML and
+  a real drift it had already caused (the frontend-install `dependabot[bot]`
+  conditional existed in CI but not in publish).
 - Publish workflow's `docker`/`release` gates simplified to plain `needs:` — a
   skipped optional job no longer fails the shared `tests` job, so the previous
   `always() && needs.*.result == 'success'` guards are no longer required.
+- Publish `docker` now gates on the full shared `tests` job, which **includes E2E**.
+  Previously `docker` listed only `test-backend`/`test-frontend`/`api-types-freshness`
+  in `needs:`, so a red E2E did not block the image push; it now does.
+- `pg-migrations` now `needs: [tests]` (was `needs: [test-backend]`, no longer
+  addressable now that the test jobs live inside the reusable suite). Without this it
+  ran even when backend lint/type/unit tests had already failed.
 - CodeQL: dropped the per-language toolchain setup and dependency-install steps.
   `build-mode: none` scans source directly and Python dependency installation has
   had no effect on results since CodeQL 2.16 (Jan 2024); `build-mode` is now wired
@@ -22,6 +29,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added explicit `timeout-minutes` to the frontend, api-freshness, docker-build-test,
   and publish `docker`/`release` jobs (previously defaulted to the 6-hour ceiling).
   Backend pytest's inner `timeout` lowered 25m → 20m so it reports before the job cap.
+
+### Migration (required when bumping consumers)
+- **Status-check context names change.** Nesting the test jobs inside the reusable
+  `tests` job renames the four test checks: `ci / Backend Tests` →
+  `ci / tests / Backend Tests` (likewise Frontend Tests, E2E Tests, API Types
+  Freshness). `ci / Docker Build Test`, `ci / PostgreSQL Migration Tests`, and the
+  `codeql / *` checks are unchanged.
+- Any consumer with branch protection requiring the old names will have PRs stuck on
+  "Expected — waiting for status" until the required-status-check contexts are
+  updated. Affects the public repos (mygarage, tidewatch, vulnforge, familycircle);
+  private free-tier repos have no branch protection and are unaffected.
+- Recommended rollout: tag a `-rc1`, run it on one consumer PR to capture the exact
+  new context strings, update branch protection, then bump the rest.
 
 ## [1.3.1] - 2026-05-27
 
@@ -31,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `.github/workflows/dependabot-auto-merge.yml` self-hosted on `@main` — repo now consumes its own auto-merge workflow so future dependabot PRs merge without manual review
 - `CHANGELOG.md` (this file), backfilled from tag history
-- README: collectionsync and myhealth listed as consumers; Per-repo flags table updated to match production; pre-release tag semantics documented in the Publish recipe
+- README: consumer list and Per-repo flags table updated to match production; pre-release tag semantics documented in the Publish recipe
 
 ## [1.3.0] - 2026-05-09
 
