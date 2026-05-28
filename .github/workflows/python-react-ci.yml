@@ -5,7 +5,7 @@ name: Reusable Python+React CI
 #
 #   jobs:
 #     ci:
-#       uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.4.0
+#       uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.4.1
 #       with:
 #         enable-translations: true   # mygarage only
 #         enable-bootstrap-token: true # vulnforge only
@@ -73,7 +73,11 @@ permissions:
 jobs:
   tests:
     # backend + frontend + e2e + api-freshness, shared with publish.
-    uses: ./.github/workflows/_python-react-tests.yml
+    # Must be a full owner/repo path pinned to this release's own tag: a `./`
+    # local path resolves against the CONSUMER repo (which has no such file)
+    # when this reusable workflow is called cross-repo, causing a 0s
+    # startup_failure. Bump the @ref on every release.
+    uses: homelabforge/shared-workflows/.github/workflows/_python-react-tests.yml@v1.4.1
     with:
       python-version: ${{ inputs.python-version }}
       bun-version-file: ${{ inputs.bun-version-file }}

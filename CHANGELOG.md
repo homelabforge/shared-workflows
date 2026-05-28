@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-05-28
+
+### Fixed
+- `python-react-ci.yml` and `python-react-publish.yml` called the internal
+  `_python-react-tests.yml` building block via a `./` local path. A `./` reference
+  inside a reusable workflow that is invoked cross-repo resolves against the
+  **consumer's** repository (which has no such file), not shared-workflows, so every
+  consumer pinned at `v1.4.0` hit an instant 0-second `startup_failure`
+  (`workflow was not found`). actionlint does not catch this. Both call sites now use
+  the full `homelabforge/shared-workflows/.github/workflows/_python-react-tests.yml@v1.4.1`
+  path. The `@ref` is self-referential and must be bumped on every future release.
+
 ## [1.4.0] - 2026-05-28
 
 ### Changed

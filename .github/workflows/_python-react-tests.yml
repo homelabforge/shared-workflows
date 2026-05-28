@@ -5,9 +5,11 @@ name: Reusable Python+React Test Suite
 # don't call this directly — the CI and publish workflows wrap it. The
 # leading underscore marks it internal.
 #
-# Local-path callers (./.github/workflows/_python-react-tests.yml) resolve
-# to THIS repo at the SAME ref the consumer pinned, so a consumer on
-# @v1.4.0 gets the v1.4.0 copy of this file too — no extra pin needed.
+# python-react-ci.yml and python-react-publish.yml call this with a full
+# owner/repo path pinned to their own release tag, NOT a `./` local path:
+# a `./` reference inside a cross-repo-called reusable workflow resolves
+# against the CONSUMER's repository (no such file) and 0s startup_failures.
+# That @ref must be bumped on every release to stay in lockstep.
 
 on:
   workflow_call:
