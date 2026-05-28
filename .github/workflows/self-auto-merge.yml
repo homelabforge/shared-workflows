@@ -16,6 +16,15 @@ name: Self Auto-Merge
 on:
   pull_request:
 
+# The repo's default workflow token is read-only, so this caller must
+# explicitly grant the write scopes the reusable's job requests — otherwise
+# the run startup-fails ("requesting contents: write... but only allowed
+# contents: read"). Fork PRs still get a read-only token regardless (the
+# event is pull_request, not pull_request_target).
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   auto-merge:
     uses: ./.github/workflows/dependabot-auto-merge.yml
