@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-06-12
+
+### Added
+- `release-tag-guard.yml`: on every `v*` tag push, fail the tag if the internal `_python-react-tests.yml@<ref>` pins in the CI/publish workflows don't equal the tag being cut — closes the silent stale-suite footgun behind the v1.4.0/v1.4.1 incident
+
+### Changed
+- SHA-pin `actionlint`; add deny-by-default top-level `permissions:` to `codeql.yml` and `dependabot-auto-merge.yml`; drop unused `packages: read` from the publish `release` job
+- Route the remaining `${{ github.actor }}` / `${{ inputs.* }}` shell interpolations through `env:`
+- Roll forward action SHAs (dependabot #5): `actions/checkout` 6.0.3, `codeql-action` 4.36.1, `docker/setup-buildx-action` 4.1.0, `docker/build-push-action` 7.2.0, `docker/login-action` 4.2.0
+
+### Fixed
+- Publish refuses to create a release with empty notes when no `## [VERSION]` CHANGELOG section exists, and emits a `::warning::` when build-provenance attestation fails instead of shipping silently
+
 ## [1.4.1] - 2026-05-28
 
 ### Fixed
