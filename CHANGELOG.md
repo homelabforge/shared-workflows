@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-06-12
+
+### Added
+- `release.yml`: pushing a `vX.Y.Z` tag now publishes a GitHub Release built from the matching CHANGELOG section, gated on the internal ref-lockstep check
+
+### Changed
+- Fold the standalone `release-tag-guard.yml` into `release.yml` as the `ref-lockstep` gate, so a stale-ref tag never produces a release
+
 ## [1.4.2] - 2026-06-12
 
 ### Added

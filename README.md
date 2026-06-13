@@ -54,7 +54,7 @@ concurrency:
 
 jobs:
   ci:
-    uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.4.2
+    uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.4.3
     with:
       enable-translations: true            # mygarage
       enable-bootstrap-token: true         # vulnforge
@@ -103,7 +103,7 @@ on:
 
 jobs:
   publish:
-    uses: homelabforge/shared-workflows/.github/workflows/python-react-publish.yml@v1.4.2
+    uses: homelabforge/shared-workflows/.github/workflows/python-react-publish.yml@v1.4.3
     with:
       enable-translations: true            # mygarage
       enable-bootstrap-token: true         # vulnforge
@@ -134,7 +134,7 @@ on:
 
 jobs:
   codeql:
-    uses: homelabforge/shared-workflows/.github/workflows/codeql.yml@v1.4.2
+    uses: homelabforge/shared-workflows/.github/workflows/codeql.yml@v1.4.3
     with:
       python-extension-pack: homelabforge/tidewatch-models  # tidewatch only
 ```
@@ -149,7 +149,7 @@ on:
 
 jobs:
   auto-merge:
-    uses: homelabforge/shared-workflows/.github/workflows/dependabot-auto-merge.yml@v1.4.2
+    uses: homelabforge/shared-workflows/.github/workflows/dependabot-auto-merge.yml@v1.4.3
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
 ```

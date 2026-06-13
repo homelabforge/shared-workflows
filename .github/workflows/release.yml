@@ -1,0 +1,122 @@
+name: Release
+
+# Tag-triggered release for shared-workflows itself. Pushing a `vX.Y.Z` tag
+# publishes a GitHub Release built from the matching CHANGELOG.md section.
+#
+# Two gates, mirroring the app repos (which gate `release` on `tests`):
+#   1. ref-lockstep — the internal `_python-react-tests.yml@<ref>` pins in the
+#      CI/publish workflows must equal the tag. A `./` path can't be used (it
+#      startup-fails cross-repo — broke v1.4.0), so the pin must be bumped every
+#      release; forgetting it makes the tag silently ship the OLD suite. This
+#      gate fails the release if the refs drift. (Was release-tag-guard.yml.)
+#   2. release — extract the tag's CHANGELOG section and create the Release.
+#      Fails (rather than publishing empty notes) if the section is missing.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  ref-lockstep:
+    name: Internal test-suite ref matches tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Assert _python-react-tests.yml refs equal the pushed tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          status=0
+          for f in \
+            .github/workflows/python-react-ci.yml \
+            .github/workflows/python-react-publish.yml; do
+            # Anchor on real `uses:` lines so a comment that happens to
+            # mention the ref can never satisfy (or spoof) the check.
+            refs=$(grep -E '^[[:space:]]*uses:' "$f" \
+              | grep -oE '_python-react-tests\.yml@[^[:space:]]+' \
+              | sed 's/.*@//' || true)
+            if [ -z "$refs" ]; then
+              echo "::error file=$f::no _python-react-tests.yml@<ref> call found (expected one pinned to $TAG)"
+              status=1
+              continue
+            fi
+            while IFS= read -r ref; do
+              if [ "$ref" != "$TAG" ]; then
+                echo "::error file=$f::internal test-suite is pinned to @$ref but this tag is $TAG — bump the @ref to $TAG before tagging"
+                status=1
+              else
+                echo "OK  $f -> _python-react-tests.yml@$ref"
+              fi
+            done <<< "$refs"
+          done
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Release blocked: delete this tag, bump the internal @ref(s) to $TAG, and re-tag."
+          fi
+          exit $status
+
+  release:
+    name: Create GitHub Release
+    needs: [ref-lockstep]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Extract changelog for this version
+        id: changelog
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          CHANGELOG=$(awk -v ver="$VERSION" '
+            /^## \[.*\]/ {
+              if (found) exit
+              if (index($0, "[" ver "]")) found=1
+              next
+            }
+            found { print }
+          ' CHANGELOG.md)
+          if [ -z "$(printf '%s' "$CHANGELOG" | tr -d '[:space:]')" ]; then
+            echo "::error title=Missing changelog::No '## [$VERSION]' section found in CHANGELOG.md; refusing to publish a release with empty notes."
+            exit 1
+          fi
+          printf '%s\n' "$CHANGELOG" > release_notes.md
+
+      - name: Check if pre-release
+        id: prerelease
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          name: ${{ steps.version.outputs.version }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ steps.prerelease.outputs.prerelease }}
+          generate_release_notes: true
