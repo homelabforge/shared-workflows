@@ -129,7 +129,9 @@ jobs:
 
       - name: Read bun version
         id: bun
-        run: echo "version=$(cat ${{ inputs.bun-version-file }})" >> "$GITHUB_OUTPUT"
+        env:
+          BUN_VERSION_FILE: ${{ inputs.bun-version-file }}
+        run: echo "version=$(cat "$BUN_VERSION_FILE")" >> "$GITHUB_OUTPUT"
 
       - name: Compute Docker tags
         id: tags
@@ -166,6 +168,7 @@ jobs:
           platforms: linux/amd64
 
       - name: Generate artifact attestation
+        id: attest
         if: github.event.repository.visibility == 'public'
         continue-on-error: true
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
@@ -174,14 +177,22 @@ jobs:
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
+      # The attestation is best-effort (continue-on-error) so a provenance
+      # hiccup never blocks a release — but a silent skip means an image
+      # shipped WITHOUT provenance and nobody noticed. Surface it loudly.
+      - name: Warn if attestation failed
+        if: ${{ github.event.repository.visibility == 'public' && steps.attest.outcome == 'failure' }}
+        run: echo "::warning title=Attestation failed::Build provenance attestation did not succeed; the image was pushed WITHOUT a provenance attestation."
+
   release:
     name: Create GitHub Release
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 10
     needs: [docker]
     permissions:
+      # contents: write to create the GitHub Release. No packages scope:
+      # this job only reads CHANGELOG.md and calls the releases API.
       contents: write
-      packages: read
 
     steps:
       - name: Checkout code
@@ -197,17 +208,25 @@ jobs:
 
       - name: Extract changelog for this version
         id: changelog
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION=${{ steps.version.outputs.version }}
           CHANGELOG=$(awk -v ver="$VERSION" '
             /^## \[.*\]/ {
               if (found) exit
-              if ($0 ~ "\\[" ver "\\]") found=1
+              if (index($0, "[" ver "]")) found=1
               next
             }
             found { print }
           ' CHANGELOG.md)
-          echo "$CHANGELOG" > release_notes.md
+          # Refuse to publish a release whose notes are empty: a missing
+          # CHANGELOG section is almost always a forgotten changelog edit,
+          # not an intentional silent release.
+          if [ -z "$(printf '%s' "$CHANGELOG" | tr -d '[:space:]')" ]; then
+            echo "::error title=Missing changelog::No '## [$VERSION]' section found in CHANGELOG.md; refusing to create a release with empty notes."
+            exit 1
+          fi
+          printf '%s\n' "$CHANGELOG" > release_notes.md
 
       - name: Check if pre-release
         id: prerelease

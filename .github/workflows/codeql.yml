@@ -28,6 +28,10 @@ on:
         type: string
         default: ""
 
+# No top-level scopes: the only job (analyze) declares exactly what it needs
+# (security-events: write, contents: read, actions: read). Deny-by-default here.
+permissions: {}
+
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})

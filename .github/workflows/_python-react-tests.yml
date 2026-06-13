@@ -114,7 +114,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd frontend
-          if [ "${{ github.actor }}" = "dependabot[bot]" ]; then bun install; else bun install --frozen-lockfile; fi
+          if [ "$GITHUB_ACTOR" = "dependabot[bot]" ]; then bun install; else bun install --frozen-lockfile; fi
 
       - name: Run TypeScript type checking
         run: cd frontend && bun run type-check
@@ -169,7 +169,7 @@ jobs:
       - name: Install frontend dependencies
         run: |
           cd frontend
-          if [ "${{ github.actor }}" = "dependabot[bot]" ]; then bun install; else bun install --frozen-lockfile; fi
+          if [ "$GITHUB_ACTOR" = "dependabot[bot]" ]; then bun install; else bun install --frozen-lockfile; fi
 
       - name: Install Playwright browsers
         run: cd frontend && bunx playwright install chromium --with-deps
@@ -236,7 +236,7 @@ jobs:
       - name: Install frontend dependencies
         run: |
           cd frontend
-          if [ "${{ github.actor }}" = "dependabot[bot]" ]; then bun install; else bun install --frozen-lockfile; fi
+          if [ "$GITHUB_ACTOR" = "dependabot[bot]" ]; then bun install; else bun install --frozen-lockfile; fi
 
       - name: Check API types freshness
         run: cd frontend && bun run check:api-freshness

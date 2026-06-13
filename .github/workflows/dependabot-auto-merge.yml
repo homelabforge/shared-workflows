@@ -20,6 +20,11 @@ on:
       github-token:
         required: true
 
+# Top-level default is read-only; the auto-merge job elevates to the
+# contents/pull-requests write it actually needs.
+permissions:
+  contents: read
+
 jobs:
   auto-merge:
     name: Dependabot Auto-Merge
