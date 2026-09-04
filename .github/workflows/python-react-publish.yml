@@ -63,7 +63,7 @@ jobs:
     # Full owner/repo path pinned to this release's own tag — a `./` local path
     # resolves against the CONSUMER repo when called cross-repo (0s
     # startup_failure). Bump the @ref on every release.
-    uses: homelabforge/shared-workflows/.github/workflows/_python-react-tests.yml@v1.4.3
+    uses: homelabforge/shared-workflows/.github/workflows/_python-react-tests.yml@v1.5.0
     with:
       python-version: ${{ inputs.python-version }}
       bun-version-file: ${{ inputs.bun-version-file }}

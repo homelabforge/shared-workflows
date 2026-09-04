@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-04
+
+### Changed
+- `python-react-ci.yml`: the `pg-migrations` job no longer waits on the `tests` aggregate. It consumes nothing that job produces, so the dependency bought only fail-fast while making this job start after E2E finished, which put it on the critical path. Measured on mygarage: ~13.5 min end to end before, ~8 min after
+
 ## [1.4.3] - 2026-06-12
 
 ### Added

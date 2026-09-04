@@ -5,7 +5,7 @@ name: Reusable Python+React CI
 #
 #   jobs:
 #     ci:
-#       uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.4.3
+#       uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.5.0
 #       with:
 #         enable-translations: true   # mygarage only
 #         enable-bootstrap-token: true # vulnforge only
@@ -77,7 +77,7 @@ jobs:
     # local path resolves against the CONSUMER repo (which has no such file)
     # when this reusable workflow is called cross-repo, causing a 0s
     # startup_failure. Bump the @ref on every release.
-    uses: homelabforge/shared-workflows/.github/workflows/_python-react-tests.yml@v1.4.3
+    uses: homelabforge/shared-workflows/.github/workflows/_python-react-tests.yml@v1.5.0
     with:
       python-version: ${{ inputs.python-version }}
       bun-version-file: ${{ inputs.bun-version-file }}
@@ -107,11 +107,28 @@ jobs:
     #   migration's SQL for real.
     name: PostgreSQL Migration Tests
     if: inputs.enable-pg-migrations
-    # Gate on the shared suite. Was needs: [test-backend] before the
-    # extraction; test-backend is no longer addressable from here, so gate
-    # on the aggregate tests job instead — otherwise PG migration tests run
-    # even when backend lint/type/unit tests have already failed.
-    needs: [tests]
+    # DELIBERATELY UNGATED, and the `needs:` that used to be here is the
+    # reason. This job consumes nothing the tests job produces: it builds
+    # backend/Dockerfile.test itself and talks to its own compose sidecar. So
+    # a dependency bought fail-fast and nothing else, and it charged that
+    # fail-fast to every GREEN run, which is the common case.
+    #
+    # MEASURED on mygarage run 33859704139 (v3.3.0 on main), job wall clocks:
+    # Backend 2.2m, Frontend 4.3m, E2E 3.7m, API-freshness 0.4m, this job
+    # 5.5m, Docker Build Test 2.1m. Gated on [tests] this job could not start
+    # until E2E finished at ~8m, so it ended at ~13.5m and WAS the critical
+    # path. Ungated it starts at 0 and ends at ~5.5m, and the critical path
+    # becomes the tests chain at ~8m. That is ~5 minutes off every CI run.
+    #
+    # The cost is one wasted ~5m runner slot on a PR whose backend tests
+    # fail. Every consumer of this workflow is a public repo, where runner
+    # minutes are free, so the trade is one-sided. Re-gate if that changes.
+    #
+    # Note for anyone tempted to gate on just the backend job instead: you
+    # cannot. `needs:` in a caller addresses the called reusable workflow as
+    # a whole, never one job inside it, so after the suite moved into
+    # _python-react-tests.yml the only choices are the whole aggregate or
+    # nothing. (It was needs: [test-backend] before that extraction.)
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 15
     # Route consumer-supplied inputs through env so they reach the shell as
