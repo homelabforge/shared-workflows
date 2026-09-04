@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `python-react-ci.yml`: the `pg-migrations` job no longer waits on the `tests` aggregate. It consumes nothing that job produces, so the dependency bought only fail-fast while making this job start after E2E finished, which put it on the critical path. Measured on mygarage: ~13.5 min end to end before, ~8 min after
+- Roll forward action SHAs (dependabot #8, #12): `codeql-action` 4.36.2, `docker/build-push-action` 7.3.0, `docker/setup-buildx-action` 4.3.0, `docker/login-action` 4.6.0, `actions/attest-build-provenance`, `softprops/action-gh-release` 3.0.3
 
 ## [1.4.3] - 2026-06-12
 
