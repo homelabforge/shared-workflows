@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0-rc1] - 2026-09-16
+
+### Added
+- `_python-react-tests.yml`: the frontend, E2E and API-freshness jobs set up Node from the consumer's `.nvmrc` (`actions/setup-node` 7.0.0, caching off), exposed as `node-version-file` / `node-version` on `python-react-ci.yml` and `python-react-publish.yml`
+- `templates/bin/ci-check`: refuse to run when the host Node major differs from `.nvmrc`
+
+### Changed
+- **Breaking for consumers without `.nvmrc`:** the Node setup fails closed rather than using the runner's default Node
+- Roll forward action majors (dependabot #9, #10, #13): `actions/setup-python` 7.0.0, `actions/checkout` 7.0.1, `astral-sh/setup-uv` 10.0.1
+
 ## [1.5.0] - 2026-09-04
 
 ### Changed

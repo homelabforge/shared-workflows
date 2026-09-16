@@ -160,6 +160,16 @@ Every workflow reads bun version from the consumer repo's `.bun-version`
 file (single source of truth). The `bun-version` input is an escape hatch
 for emergency overrides — leave empty to use the file.
 
+## Node version pinning
+
+The frontend, E2E and API-freshness jobs also set up Node from the consumer
+repo's `.nvmrc` (`node-version-file` input). vitest, eslint, tsc and Playwright
+run on Node even under `bun run`, because their bins are
+`#!/usr/bin/env node`; before this they got the runner image's default Node.
+The file is required: a missing `.nvmrc` fails the job instead of falling back
+silently. `node-version` is the escape hatch. `templates/bin/ci-check` checks
+the host's Node major against the same file.
+
 ## bin/ci-check template
 
 `templates/bin/ci-check` is a copy-into-your-repo template that gives
