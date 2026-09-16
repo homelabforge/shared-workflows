@@ -32,6 +32,16 @@ on:
         # Escape hatch — leave empty to use bun-version-file.
         type: string
         default: ""
+      node-version-file:
+        # vitest, eslint, tsc and Playwright run on Node even under `bun run`
+        # (their bins are `#!/usr/bin/env node`). Without this they got the
+        # runner image's default Node, which drifts from the consumer's.
+        type: string
+        default: ".nvmrc"
+      node-version:
+        # Escape hatch: leave empty to use node-version-file.
+        type: string
+        default: ""
       enable-e2e:
         type: boolean
         default: true
@@ -77,11 +87,13 @@ jobs:
     # local path resolves against the CONSUMER repo (which has no such file)
     # when this reusable workflow is called cross-repo, causing a 0s
     # startup_failure. Bump the @ref on every release.
-    uses: homelabforge/shared-workflows/.github/workflows/_python-react-tests.yml@v1.5.0
+    uses: homelabforge/shared-workflows/.github/workflows/_python-react-tests.yml@v1.6.0-rc1
     with:
       python-version: ${{ inputs.python-version }}
       bun-version-file: ${{ inputs.bun-version-file }}
       bun-version: ${{ inputs.bun-version }}
+      node-version-file: ${{ inputs.node-version-file }}
+      node-version: ${{ inputs.node-version }}
       enable-e2e: ${{ inputs.enable-e2e }}
       enable-translations: ${{ inputs.enable-translations }}
       enable-bootstrap-token: ${{ inputs.enable-bootstrap-token }}
