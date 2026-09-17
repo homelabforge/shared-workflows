@@ -57,7 +57,7 @@ on:
         type: string
         required: true
       release-name-prefix:
-        # E.g. "TideWatch v" → produces "TideWatch v3.9.2"
+        # E.g. "MyGarage v" → produces "MyGarage v3.9.2"
         type: string
         required: true
     secrets:

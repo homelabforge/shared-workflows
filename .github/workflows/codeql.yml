@@ -23,8 +23,8 @@ on:
         type: string
         default: ".github/codeql/codeql-config.yml"
       python-extension-pack:
-        # E.g. "homelabforge/tidewatch-models" — set to enable extra
-        # CodeQL extension packs for the python analysis.
+        # Extra CodeQL model/extension packs for the python analysis.
+        # No active consumer sets this.
         type: string
         default: ""
 
