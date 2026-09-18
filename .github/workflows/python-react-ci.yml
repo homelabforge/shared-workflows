@@ -7,8 +7,7 @@ name: Reusable Python+React CI
 #     ci:
 #       uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.5.0
 #       with:
-#         enable-translations: true   # mygarage only
-#         enable-bootstrap-token: true # vulnforge only
+#         enable-translations: true
 #         security-tripwire-script: .github/scripts/security-tripwire.sh
 #
 # Inputs default to the homelab-standard values. Bun version comes from

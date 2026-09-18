@@ -1,6 +1,8 @@
 # homelabforge/shared-workflows
 
 Reusable GitHub Actions workflows for HomeLabForge Python+React repos.
+MyGarage is the only active consumer: every other app was archived on
+2026-09-16, and their pins are frozen at whatever tag they last used.
 
 Pinned via versioned tags (`v1.0.0`, `v1.1.0`, …). Consumers MUST pin to a
 released tag — never `@main`, never a branch.
@@ -9,7 +11,7 @@ released tag — never `@main`, never a branch.
 
 | File | Purpose | Used by |
 |---|---|---|
-| `python-react-ci.yml` | CI: shared test suite + pg-migrations + docker-build-test | familycircle, mygarage, tidewatch, vulnforge |
+| `python-react-ci.yml` | CI: shared test suite + pg-migrations + docker-build-test | mygarage |
 | `python-react-publish.yml` | Tag publish: shared test suite → docker push → release | same |
 | `_python-react-tests.yml` | Internal building block: ruff + pyright + pytest + frontend gates + E2E + api-freshness. Called by CI and publish — not for direct consumer use | (internal) |
 | `codeql.yml` | CodeQL python + javascript matrix | same |
@@ -56,21 +58,16 @@ jobs:
   ci:
     uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.5.0
     with:
-      enable-translations: true            # mygarage
-      enable-bootstrap-token: true         # vulnforge
-      enable-e2e: false                    # familycircle
-      enable-pg-migrations: true           # mygarage (>=v1.2.0)
+      enable-translations: true
+      enable-pg-migrations: true           # >=v1.2.0
       security-tripwire-script: .github/scripts/security-tripwire.sh
 ```
 
-Per-repo flags (actual values in production):
+Production flags (mygarage):
 
 | Repo | enable-e2e | enable-translations | enable-bootstrap-token | enable-pg-migrations | enable-api-freshness-check | tripwire-script |
 |---|---|---|---|---|---|---|
-| familycircle | false | (default) | (default) | (default) | (default) | `.github/scripts/security-tripwire.sh` |
 | mygarage | (default) | true | (default) | true | (default) | `.github/scripts/security-tripwire.sh` |
-| tidewatch | (default) | (default) | (default) | (default) | (default) | `.github/scripts/security-tripwire.sh` |
-| vulnforge | (default) | (default) | true | (default) | (default) | `.github/scripts/security-tripwire.sh` |
 
 ### `enable-pg-migrations` (v1.2.0+)
 
@@ -81,8 +78,7 @@ exercises `pytest tests/migrations/` against a real PostgreSQL sidecar
 This is the path that catches PG dialect bugs in migrations — `DATETIME`
 vs `TIMESTAMP`, `ADD CONSTRAINT IF NOT EXISTS`, etc. — that the SQLite
 test path silently passes. mygarage adopted this in v2.27.0-rc2 after
-a real rc1 incident; other consumers can opt in once they ship a
-`docker-compose.test.yml` and a `backend/Dockerfile.test`.
+a real rc1 incident.
 
 Customization (rare — defaults match the mygarage pattern):
 
@@ -105,12 +101,10 @@ jobs:
   publish:
     uses: homelabforge/shared-workflows/.github/workflows/python-react-publish.yml@v1.5.0
     with:
-      enable-translations: true            # mygarage
-      enable-bootstrap-token: true         # vulnforge
-      enable-e2e: false                    # familycircle
+      enable-translations: true
       security-tripwire-script: .github/scripts/security-tripwire.sh
-      image-name: homelabforge/<repo>      # e.g. homelabforge/tidewatch
-      release-name-prefix: '<Repo> v'      # e.g. 'TideWatch v'
+      image-name: homelabforge/mygarage
+      release-name-prefix: 'MyGarage v'
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -135,8 +129,6 @@ on:
 jobs:
   codeql:
     uses: homelabforge/shared-workflows/.github/workflows/codeql.yml@v1.5.0
-    with:
-      python-extension-pack: homelabforge/tidewatch-models  # tidewatch only
 ```
 
 ### Dependabot Auto-Merge (consumer `.github/workflows/dependabot-auto-merge.yml`)
