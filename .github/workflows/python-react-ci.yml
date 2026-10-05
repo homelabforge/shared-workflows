@@ -5,7 +5,7 @@ name: Reusable Python+React CI
 #
 #   jobs:
 #     ci:
-#       uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.5.0
+#       uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.6.0
 #       with:
 #         enable-translations: true
 #         security-tripwire-script: .github/scripts/security-tripwire.sh
@@ -86,7 +86,7 @@ jobs:
     # local path resolves against the CONSUMER repo (which has no such file)
     # when this reusable workflow is called cross-repo, causing a 0s
     # startup_failure. Bump the @ref on every release.
-    uses: homelabforge/shared-workflows/.github/workflows/_python-react-tests.yml@v1.6.0-rc1
+    uses: homelabforge/shared-workflows/.github/workflows/_python-react-tests.yml@v1.6.0
     with:
       python-version: ${{ inputs.python-version }}
       bun-version-file: ${{ inputs.bun-version-file }}
@@ -141,7 +141,9 @@ jobs:
     # _python-react-tests.yml the only choices are the whole aggregate or
     # nothing. (It was needs: [test-backend] before that extraction.)
     runs-on: ${{ inputs.runner-os }}
-    timeout-minutes: 15
+    # Was 15. Once mygarage moved its whole suite onto PG this job hit 14m45s
+    # on a green run, so 15 was about to start killing good builds.
+    timeout-minutes: 30
     # Route consumer-supplied inputs through env so they reach the shell as
     # data, never as expanded workflow expressions.
     env:

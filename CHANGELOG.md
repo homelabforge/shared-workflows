@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-05
+
+Promotes 1.6.0-rc1, canaried on mygarage since 2026-09-16.
+
+### Changed
+- `python-react-ci.yml`: the `pg-migrations` job timeout goes from 15 to 30 minutes. mygarage's full PG suite hit 14m45s on a green run.
+- Bump `astral-sh/setup-uv` to 10.2.0, `codeql-action` to 4.38.2, `docker/setup-buildx-action` to 4.4.1 and `docker/build-push-action` to 7.4.0.
+
 ## [1.6.0-rc1] - 2026-09-16
 
 ### Added
