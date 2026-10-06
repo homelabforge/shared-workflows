@@ -108,7 +108,10 @@ def check_keepers() -> list[str]:
 
 def check_action_refs() -> list[str]:
     problems: list[str] = []
-    files = sorted(WORKFLOWS.glob("*.yml")) + sorted(ACTIONS.glob("*/action.yml"))
+    # GitHub takes both spellings, for workflows and for action metadata.
+    files = sorted([*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")]) + sorted(
+        [*ACTIONS.glob("*/action.yml"), *ACTIONS.glob("*/action.yaml")]
+    )
     for path in files:
         doc = yaml.safe_load(path.read_text(encoding="utf-8"))
         steps = [
@@ -124,10 +127,18 @@ def check_action_refs() -> list[str]:
                 continue
             # actionlint can't follow `$/` and we mute it there, so check the
             # action exists and gets the inputs it takes here instead.
-            action = Path(uses[2:]) / "action.yml"
-            if not action.is_file():
-                problems.append(f"{path}: {uses} has no {action}")
+            folder = Path(uses[2:])
+            found = [
+                folder / n
+                for n in ("action.yml", "action.yaml")
+                if (folder / n).is_file()
+            ]
+            if not found:
+                problems.append(
+                    f"{path}: {uses} has no action.yml or action.yaml in {folder}"
+                )
                 continue
+            action = found[0]
             doc_inputs = yaml.safe_load(action.read_text(encoding="utf-8"))
             inputs = doc_inputs.get("inputs") or {}
             passed = set(step.get("with") or {})

@@ -64,7 +64,37 @@ class ActionRefs(unittest.TestCase):
     def test_misspelled_action_path(self) -> None:
         found = self.problems("$/.github/actions/b", "reports-dir: r\ncount: 2")
         self.assertEqual(len(found), 1)
-        self.assertIn("no .github/actions/b/action.yml", found[0])
+        self.assertIn("no action.yml or action.yaml in .github/actions/b", found[0])
+
+    def test_action_yaml_filename_resolves(self) -> None:
+        Path(".github/actions/c").mkdir()
+        Path(".github/actions/c/action.yaml").write_text(ACTION, encoding="utf-8")
+        self.assertEqual(
+            self.problems("$/.github/actions/c", "reports-dir: r\ncount: 2"), []
+        )
+
+    def test_steps_inside_an_action_yaml_are_scanned(self) -> None:
+        Path(".github/actions/c").mkdir()
+        Path(".github/actions/c/action.yaml").write_text(
+            "name: C\nruns:\n  using: composite\n  steps:\n"
+            "    - uses: homelabforge/shared-workflows/.github/actions/a@v1.7.0\n",
+            encoding="utf-8",
+        )
+        found = self.problems("$/.github/actions/a", "reports-dir: r\ncount: 2")
+        self.assertEqual(len(found), 1)
+        self.assertIn("action.yaml", found[0])
+
+    def test_yaml_workflows_are_scanned(self) -> None:
+        Path(".github/workflows/v.yaml").write_text(
+            workflow(
+                "homelabforge/shared-workflows/.github/actions/a@v1.7.0",
+                "reports-dir: r\ncount: 2",
+            ),
+            encoding="utf-8",
+        )
+        found = self.problems("$/.github/actions/a", "reports-dir: r\ncount: 2")
+        self.assertEqual(len(found), 1)
+        self.assertIn("v.yaml", found[0])
 
     def test_input_the_action_does_not_take(self) -> None:
         found = self.problems(
