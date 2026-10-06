@@ -1,7 +1,9 @@
 name: Reusable Python+React Test Suite
 
-# Internal building block: the backend/frontend/e2e/api-freshness matrix
-# shared by python-react-ci.yml and python-react-publish.yml. Consumers
+# Internal building block: the backend/frontend/e2e/api-freshness test jobs
+# shared by python-react-ci.yml and python-react-publish.yml. Each suite runs
+# as a checks job plus N shard jobs, and one small keeper per suite holds the
+# required check name and fails unless all of them passed. Consumers
 # don't call this directly — the CI and publish workflows wrap it. The
 # leading underscore marks it internal.
 #
@@ -46,6 +48,19 @@ on:
       enable-api-freshness-check:
         type: boolean
         default: true
+      backend-test-shards:
+        # Runners the backend pytest run is split across, 1-6. Above 1 the
+        # consumer's conftest needs the shard hook (README, "Test shards").
+        type: number
+        default: 1
+      frontend-test-shards:
+        # Runners vitest is split across, 1-6. Uses vitest's own --shard.
+        type: number
+        default: 1
+      e2e-test-shards:
+        # Runners Playwright is split across, 1-6. Uses Playwright's own --shard.
+        type: number
+        default: 1
       runner-os:
         type: string
         default: ubuntu-latest
@@ -57,10 +72,10 @@ permissions:
   contents: read
 
 jobs:
-  test-backend:
-    name: Backend Tests
+  backend-checks:
+    name: Backend Checks
     runs-on: ${{ inputs.runner-os }}
-    timeout-minutes: 25
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -93,15 +108,97 @@ jobs:
 
       - name: Security tripwire
         if: inputs.security-tripwire-script != ''
-        run: bash "${{ inputs.security-tripwire-script }}"
+        # Through env, like every other consumer input (R1-F4). v1.6.0
+        # interpolated it straight into the shell.
+        env:
+          TRIPWIRE_SCRIPT: ${{ inputs.security-tripwire-script }}
+        run: bash "$TRIPWIRE_SCRIPT"
+
+  backend-tests:
+    name: Backend Tests (${{ matrix.shard }}/${{ strategy.job-total }})
+    runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        # Expressions can't add, so the shard list is looked up. Slot 0 is
+        # empty on purpose: zero shards fails the run instead of running nothing.
+        shard: ${{ fromJSON('[[],[1],[1,2],[1,2,3],[1,2,3,4],[1,2,3,4,5],[1,2,3,4,5,6]]')[inputs.backend-test-shards] }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v8
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'backend/uv.lock'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          uv sync --frozen --all-extras
 
       - name: Run pytest
+        env:
+          PYTEST_SHARD_INDEX: ${{ matrix.shard }}
+          PYTEST_SHARD_COUNT: ${{ strategy.job-total }}
+          PYTEST_SHARD_REPORT: pytest-shard-report.json
         run: |
           cd backend
           timeout 20m uv run pytest tests/ -v --tb=short
 
-  test-frontend:
-    name: Frontend Tests
+      - name: Upload shard report
+        if: ${{ !cancelled() && inputs.backend-test-shards > 1 }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pytest-shard-report-backend-${{ matrix.shard }}
+          path: backend/pytest-shard-report.json
+          if-no-files-found: error
+          # A "re-run failed jobs" shard uploads the same name again.
+          overwrite: true
+          retention-days: 1
+
+  test-backend:
+    name: Backend Tests
+    # Holds the required check. always() because a skipped job reports
+    # Success, which would let a PR merge past red or cancelled shards.
+    if: always()
+    needs: [backend-checks, backend-tests]
+    runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: 5
+
+    steps:
+      - name: Every backend job passed
+        env:
+          CHECKS: ${{ needs.backend-checks.result }}
+          TESTS: ${{ needs.backend-tests.result }}
+        run: |
+          echo "Backend Checks: $CHECKS, Backend Tests shards: $TESTS"
+          test "$CHECKS" = success && test "$TESTS" = success
+
+      - name: Download shard reports
+        if: inputs.backend-test-shards > 1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: pytest-shard-report-backend-*
+          path: shard-reports
+
+      - name: Every test module ran exactly once
+        if: inputs.backend-test-shards > 1
+        uses: homelabforge/shared-workflows/.github/actions/verify-pytest-shards@v1.7.0-rc1
+        with:
+          reports-dir: shard-reports
+          count: ${{ inputs.backend-test-shards }}
+
+  frontend-checks:
+    name: Frontend Checks
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 15
 
@@ -150,15 +247,83 @@ jobs:
         if: inputs.enable-translations
         run: cd frontend && bun run validate:translations
 
-      - name: Run tests
-        run: cd frontend && bun run test:run
+  frontend-tests:
+    name: Frontend Tests (${{ matrix.shard }}/${{ strategy.job-total }})
+    runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON('[[],[1],[1,2],[1,2,3],[1,2,3,4],[1,2,3,4,5],[1,2,3,4,5,6]]')[inputs.frontend-test-shards] }}
 
-  test-e2e:
-    name: E2E Tests
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Bun (from version-file)
+        if: inputs.bun-version == ''
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: ${{ inputs.bun-version-file }}
+
+      - name: Set up Bun (from explicit override)
+        if: inputs.bun-version != ''
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: ${{ inputs.bun-version }}
+
+      - name: Set up Node (from version-file)
+        if: inputs.node-version == ''
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ${{ inputs.node-version-file }}
+          package-manager-cache: false
+
+      - name: Set up Node (from explicit override)
+        if: inputs.node-version != ''
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          if [ "$GITHUB_ACTOR" = "dependabot[bot]" ]; then bun install; else bun install --frozen-lockfile; fi
+
+      - name: Run tests
+        env:
+          SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+        run: cd frontend && bun run test:run --shard="$SHARD"
+
+  test-frontend:
+    name: Frontend Tests
+    # Holds the required check; always() for the same reason as test-backend.
+    if: always()
+    needs: [frontend-checks, frontend-tests]
+    runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: 5
+
+    steps:
+      - name: Every frontend job passed
+        env:
+          CHECKS: ${{ needs.frontend-checks.result }}
+          TESTS: ${{ needs.frontend-tests.result }}
+        run: |
+          echo "Frontend Checks: $CHECKS, Frontend Tests shards: $TESTS"
+          test "$CHECKS" = success && test "$TESTS" = success
+
+  e2e-tests:
+    name: E2E Tests (${{ matrix.shard }}/${{ strategy.job-total }})
     if: inputs.enable-e2e
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 20
-    needs: [test-backend, test-frontend]
+    # No needs. E2E builds everything it uses itself, so waiting on the unit
+    # jobs only bought fail-fast, and put E2E after Frontend on every green run.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON('[[],[1],[1,2],[1,2,3],[1,2,3,4],[1,2,3,4,5],[1,2,3,4,5,6]]')[inputs.e2e-test-shards] }}
 
     steps:
       - name: Checkout code
@@ -213,16 +378,17 @@ jobs:
         run: cd frontend && bunx playwright install chromium --with-deps
 
       - name: Run E2E tests
-        run: cd frontend && bun run e2e
+        run: cd frontend && bun run e2e --shard="$SHARD"
         env:
           CI: true
+          SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
           VULNFORGE_BOOTSTRAP_TOKEN: ${{ inputs.enable-bootstrap-token && 'e2e-ci-test-token' || '' }}
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: ${{ !cancelled() }}
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: frontend/playwright-report/
           retention-days: 14
 
@@ -230,9 +396,25 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: ${{ !cancelled() }}
         with:
-          name: playwright-results
+          name: playwright-results-${{ matrix.shard }}
           path: frontend/test-results/
           retention-days: 7
+
+  test-e2e:
+    name: E2E Tests
+    # Holds the required check; always() for the same reason as test-backend.
+    if: always() && inputs.enable-e2e
+    needs: [e2e-tests]
+    runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: 5
+
+    steps:
+      - name: Every E2E shard passed
+        env:
+          TESTS: ${{ needs.e2e-tests.result }}
+        run: |
+          echo "E2E Tests shards: $TESTS"
+          test "$TESTS" = success
 
   api-types-freshness:
     name: API Types Freshness
