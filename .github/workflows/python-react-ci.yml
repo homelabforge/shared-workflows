@@ -82,6 +82,11 @@ on:
       pg-migrations-pytest-path:
         type: string
         default: "tests/migrations/"
+      pg-migrations-shards:
+        # Runners the PG pytest run is split across, 1-6, each with its own
+        # sidecar. Above 1 the consumer's conftest needs the shard hook.
+        type: number
+        default: 1
       runner-os:
         type: string
         default: ubuntu-latest
@@ -116,7 +121,7 @@ jobs:
       frontend-test-shards: ${{ inputs.frontend-test-shards }}
       e2e-test-shards: ${{ inputs.e2e-test-shards }}
 
-  pg-migrations:
+  pg-migrations-shard:
     # Why this job exists:
     #   The repo's existing test-backend job runs pytest against
     #   SQLite. Migration 054 in mygarage v2.27.0-rc1 shipped with two
@@ -132,7 +137,7 @@ jobs:
     #   a pre-migration SQL baseline. Migration tests load the
     #   baseline into a clean PG schema and exercise the new
     #   migration's SQL for real.
-    name: PostgreSQL Migration Tests
+    name: PostgreSQL Migration Tests (${{ matrix.shard }}/${{ strategy.job-total }})
     if: inputs.enable-pg-migrations
     # DELIBERATELY UNGATED, and the `needs:` that used to be here is the
     # reason. This job consumes nothing the tests job produces: it builds
@@ -146,6 +151,7 @@ jobs:
     # until E2E finished at ~8m, so it ended at ~13.5m and WAS the critical
     # path. Ungated it starts at 0 and ends at ~5.5m, and the critical path
     # becomes the tests chain at ~8m. That is ~5 minutes off every CI run.
+    # v1.7.0 splits it across runners; see the CHANGELOG for the numbers.
     #
     # The cost is one wasted ~5m runner slot on a PR whose backend tests
     # fail. Every consumer of this workflow is a public repo, where runner
@@ -160,6 +166,10 @@ jobs:
     # Was 15. Once mygarage moved its whole suite onto PG this job hit 14m45s
     # on a green run, so 15 was about to start killing good builds.
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON('[[],[1],[1,2],[1,2,3],[1,2,3,4],[1,2,3,4,5],[1,2,3,4,5,6]]')[inputs.pg-migrations-shards] }}
     # Route consumer-supplied inputs through env so they reach the shell as
     # data, never as expanded workflow expressions.
     env:
@@ -171,18 +181,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-
-      - name: Build test image (cached via gha)
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile.test
-          tags: ${{ inputs.pg-migrations-service }}:local
-          load: true
-          cache-from: type=gha,scope=pg-migrations
-          cache-to: type=gha,scope=pg-migrations,mode=max
+      - name: Build test image
+        # Plain docker build, straight into the local image store. The gha
+        # cache spent 32s exporting and ~25s loading to save a ~9s build
+        # (mygarage run 37449264165).
+        run: docker build -t "$PG_SERVICE:local" -f backend/Dockerfile.test backend
 
       - name: Bring up PostgreSQL sidecar
         env:
@@ -213,21 +216,70 @@ jobs:
         env:
           MYGARAGE_TEST_UID: "1001"
           MYGARAGE_TEST_GID: "1001"
+          PYTEST_SHARD_INDEX: ${{ matrix.shard }}
+          PYTEST_SHARD_COUNT: ${{ strategy.job-total }}
+          # Relative to pytest's rootdir. The service mounts backend/ there,
+          # so it lands at backend/ on the runner.
+          PYTEST_SHARD_REPORT: pytest-shard-report.json
         run: |
           # Word-splitting on $PG_PYTEST_PATH is intentional: consumers may
-          # pass several space-separated test paths (mygarage adds
-          # tests/integration/).
+          # pass several space-separated test paths.
           # shellcheck disable=SC2086
           docker compose -f "$PG_COMPOSE_FILE" \
             -p "$PG_SERVICE" run --rm \
+            -e "PYTEST_SHARD_INDEX=$PYTEST_SHARD_INDEX" \
+            -e "PYTEST_SHARD_COUNT=$PYTEST_SHARD_COUNT" \
+            -e "PYTEST_SHARD_REPORT=$PYTEST_SHARD_REPORT" \
             "$PG_SERVICE" \
             pytest $PG_PYTEST_PATH -v --tb=short
+
+      - name: Upload shard report
+        if: ${{ !cancelled() && inputs.pg-migrations-shards > 1 }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pytest-shard-report-pg-${{ matrix.shard }}
+          path: backend/pytest-shard-report.json
+          if-no-files-found: error
+          # A "re-run failed jobs" shard uploads the same name again.
+          overwrite: true
+          retention-days: 1
 
       - name: Tear down stack
         if: always()
         run: |
           docker compose -f "$PG_COMPOSE_FILE" \
             -p "$PG_SERVICE" down -v || true
+
+  pg-migrations:
+    name: PostgreSQL Migration Tests
+    # always() for the same reason as the suite's keepers. Not a required
+    # check today, but the name is the one people look for.
+    if: always() && inputs.enable-pg-migrations
+    needs: [pg-migrations-shard]
+    runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: 5
+
+    steps:
+      - name: Every PG shard passed
+        env:
+          TESTS: ${{ needs.pg-migrations-shard.result }}
+        run: |
+          echo "PostgreSQL Migration Tests shards: $TESTS"
+          test "$TESTS" = success
+
+      - name: Download shard reports
+        if: inputs.pg-migrations-shards > 1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: pytest-shard-report-pg-*
+          path: shard-reports
+
+      - name: Every test module ran exactly once
+        if: inputs.pg-migrations-shards > 1
+        uses: homelabforge/shared-workflows/.github/actions/verify-pytest-shards@v1.7.0-rc1
+        with:
+          reports-dir: shard-reports
+          count: ${{ inputs.pg-migrations-shards }}
 
   docker-build-test:
     name: Docker Build Test
