@@ -1,0 +1,6 @@
+# actionlint 1.7.12 and older don't know `$/` refs yet and flag them as a
+# missing ref. check_suite.py makes sure our own actions go through `$/`.
+paths:
+  .github/workflows/**/*.{yml,yaml}:
+    ignore:
+      - 'specifying action "\$/\.github/actions/[^"]+" in invalid format because ref is missing'
