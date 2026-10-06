@@ -121,8 +121,9 @@ the consumer's `ci.yml`.
   reads the env below, keeps its share of whole test modules and writes a report.
   The keeper then fails the run unless the reports cover every collected module
   exactly once (`.github/actions/verify-pytest-shards`). A consumer without the
-  hook works at 1 shard; above 1 the verify step fails ("expected N shard
-  reports, found 0"). mygarage's `backend/tests/_shard.py` is the reference hook.
+  hook works at 1 shard; above 1 every shard runs the whole suite, then fails
+  its "Upload shard report" step (no `pytest-shard-report.json`), so the keeper
+  goes red. mygarage's `backend/tests/_shard.py` is the reference hook.
 
 The pytest contract, set on every pytest run in a sharded job (backend and PG):
 
