@@ -5,9 +5,9 @@ name: Release
 #
 # Two gates, mirroring the app repos (which gate `release` on `tests`):
 #   1. ref-lockstep: every internal `homelabforge/shared-workflows/...@<ref>`
-#      pin must equal the tag, i.e. the `_python-react-tests.yml` calls in the
-#      CI/publish workflows. Our own actions go through `$/` and have no ref.
-#      A `./` path can't be used (it
+#      pin must equal the tag; today that's the `_python-react-tests.yml`
+#      calls in the CI/publish workflows. Our own actions go through `$/` and
+#      have no ref. A `./` path can't be used (it
 #      startup-fails cross-repo — broke v1.4.0), so the pin must be bumped every
 #      release; forgetting it makes the tag silently ship the OLD suite. This
 #      gate fails the release if the refs drift. (Was release-tag-guard.yml.)
@@ -38,11 +38,16 @@ jobs:
           status=0
           for f in \
             .github/workflows/python-react-ci.yml \
-            .github/workflows/python-react-publish.yml; do
+            .github/workflows/python-react-publish.yml \
+            .github/workflows/_python-react-tests.yml; do
             # Every `uses:` back into this repo has to name the tag being cut.
             # Anchored on real `uses:` lines so a comment can't satisfy it.
             refs=$(grep -E '^[[:space:]-]*uses:[[:space:]]*homelabforge/shared-workflows/' "$f" \
               | grep -oE '@[^[:space:]]+' | sed 's/^@//' || true)
+            # The suite calls nothing back here today; the callers always do.
+            if [ -z "$refs" ] && [ "$f" = .github/workflows/_python-react-tests.yml ]; then
+              continue
+            fi
             if [ -z "$refs" ]; then
               echo "::error file=$f::no homelabforge/shared-workflows/...@<ref> found (expected refs pinned to $TAG)"
               status=1
