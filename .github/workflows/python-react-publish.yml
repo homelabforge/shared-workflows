@@ -47,6 +47,19 @@ on:
       enable-api-freshness-check:
         type: boolean
         default: true
+      backend-test-shards:
+        # Runners the backend pytest run is split across, 1-6. Above 1 the
+        # consumer's conftest needs the shard hook (README, "Test shards").
+        type: number
+        default: 1
+      frontend-test-shards:
+        # Runners vitest is split across, 1-6. Uses vitest's own --shard.
+        type: number
+        default: 1
+      e2e-test-shards:
+        # Runners Playwright is split across, 1-6. Uses Playwright's own --shard.
+        type: number
+        default: 1
       runner-os:
         type: string
         default: ubuntu-latest
@@ -73,7 +86,7 @@ jobs:
     # Full owner/repo path pinned to this release's own tag — a `./` local path
     # resolves against the CONSUMER repo when called cross-repo (0s
     # startup_failure). Bump the @ref on every release.
-    uses: homelabforge/shared-workflows/.github/workflows/_python-react-tests.yml@v1.6.0
+    uses: homelabforge/shared-workflows/.github/workflows/_python-react-tests.yml@v1.7.0-rc1
     with:
       python-version: ${{ inputs.python-version }}
       bun-version-file: ${{ inputs.bun-version-file }}
@@ -86,6 +99,9 @@ jobs:
       enable-api-freshness-check: ${{ inputs.enable-api-freshness-check }}
       runner-os: ${{ inputs.runner-os }}
       security-tripwire-script: ${{ inputs.security-tripwire-script }}
+      backend-test-shards: ${{ inputs.backend-test-shards }}
+      frontend-test-shards: ${{ inputs.frontend-test-shards }}
+      e2e-test-shards: ${{ inputs.e2e-test-shards }}
 
   docker:
     name: Build and Push Docker Image
