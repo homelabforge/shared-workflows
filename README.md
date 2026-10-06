@@ -74,10 +74,6 @@ jobs:
       enable-translations: true
       enable-pg-migrations: true           # >=v1.2.0
       security-tripwire-script: .github/scripts/security-tripwire.sh
-      backend-test-shards: 2               # >=v1.7.0, see "Test shards"
-      frontend-test-shards: 3
-      e2e-test-shards: 2
-      pg-migrations-shards: 3
 ```
 
 Production flags (mygarage):
@@ -104,7 +100,7 @@ Customization (rare — defaults match the mygarage pattern):
 | `pg-migrations-compose-file` | `docker-compose.test.yml` | Compose file path |
 | `pg-migrations-service` | `mygarage-test` | Compose service that runs pytest |
 | `pg-migrations-pytest-path` | `tests/migrations/` | What pytest invokes (mygarage overrides to also include `tests/integration/`) |
-| `pg-migrations-shards` | `1` | Runners the PG run is split across, each with its own sidecar (see "Test shards") |
+| `pg-migrations-shards` | `1` | v1.7.0+: runners the PG run is split across, each with its own sidecar (see "Test shards") |
 
 ### Test shards (v1.7.0+)
 
