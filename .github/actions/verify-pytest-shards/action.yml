@@ -1,0 +1,20 @@
+name: Verify pytest shards
+description: Fails unless the shard reports cover every collected test module exactly once.
+
+inputs:
+  reports-dir:
+    description: Folder the shard report artifacts were downloaded into.
+    required: true
+  count:
+    description: How many shards the run was split into.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Every test module ran exactly once
+      shell: bash
+      env:
+        REPORTS_DIR: ${{ inputs.reports-dir }}
+        SHARD_COUNT: ${{ inputs.count }}
+      run: python3 "$GITHUB_ACTION_PATH/verify.py" "$REPORTS_DIR" "$SHARD_COUNT"
