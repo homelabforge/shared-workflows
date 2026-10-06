@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0-rc1] - 2026-10-06
+
+### Added
+- `*-test-shards` and `pg-migrations-shards` inputs split the backend, frontend, E2E and PG test runs across parallel runners.
+- `verify-pytest-shards` action: fails the run unless the pytest shards covered every module exactly once.
+
+### Changed
+- E2E no longer waits on the backend and frontend jobs.
+- Required check names are now held by small jobs that wait on every shard and can't be skipped.
+- The PG job builds its test image with plain `docker build`, without the gha cache.
+- `release.yml`'s ref-lockstep gate covers every internal ref, not just the test suite.
+- `security-tripwire-script` reaches the shell through `env`, not interpolated into `run:`.
+
 ## [1.6.0] - 2026-10-05
 
 Promotes 1.6.0-rc1, canaried on mygarage since 2026-09-16.

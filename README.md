@@ -37,6 +37,19 @@ The CI-local jobs keep the flat form: `ci / Docker Build Test`,
 branch-protection required-check contexts to match — a renamed-but-still-required
 check blocks PRs indefinitely.
 
+Since v1.7.0, `Backend Tests`, `Frontend Tests`, `E2E Tests` and
+`ci / PostgreSQL Migration Tests` are held by small keeper jobs that wait on
+every part of their suite (the checks job and every shard) and fail unless all
+of them passed. They run `if: always()`, so a skipped or cancelled shard can't
+read as green. `API Types Freshness` is unchanged: still its own conditional
+job, waiting on `Backend Tests`. A suite turned off on purpose
+(`enable-e2e: false`, `enable-pg-migrations: false`) still skips its keeper,
+same as before.
+
+The shard jobs (`... (1/3)`) and `Backend Checks` / `Frontend Checks` are not
+meant to be required; the keepers already wait on them. Requiring a shard job
+wedges every PR the day its shard count changes.
+
 ## Wrapper recipes
 
 ### CI (consumer `.github/workflows/ci.yml`)
@@ -61,6 +74,10 @@ jobs:
       enable-translations: true
       enable-pg-migrations: true           # >=v1.2.0
       security-tripwire-script: .github/scripts/security-tripwire.sh
+      backend-test-shards: 2               # >=v1.7.0, see "Test shards"
+      frontend-test-shards: 3
+      e2e-test-shards: 2
+      pg-migrations-shards: 3
 ```
 
 Production flags (mygarage):
@@ -73,7 +90,7 @@ Production flags (mygarage):
 
 When `true`, runs the consumer's `docker-compose.test.yml` stack and
 exercises `pytest tests/migrations/` against a real PostgreSQL sidecar
-(in addition to the SQLite path the standard `test-backend` job uses).
+(in addition to the SQLite path the standard backend test jobs use).
 
 This is the path that catches PG dialect bugs in migrations — `DATETIME`
 vs `TIMESTAMP`, `ADD CONSTRAINT IF NOT EXISTS`, etc. — that the SQLite
@@ -87,6 +104,54 @@ Customization (rare — defaults match the mygarage pattern):
 | `pg-migrations-compose-file` | `docker-compose.test.yml` | Compose file path |
 | `pg-migrations-service` | `mygarage-test` | Compose service that runs pytest |
 | `pg-migrations-pytest-path` | `tests/migrations/` | What pytest invokes (mygarage overrides to also include `tests/integration/`) |
+| `pg-migrations-shards` | `1` | Runners the PG run is split across, each with its own sidecar (see "Test shards") |
+
+### Test shards (v1.7.0+)
+
+Four inputs split the long suites across parallel runners: `backend-test-shards`,
+`frontend-test-shards`, `e2e-test-shards` (CI and publish) and
+`pg-migrations-shards` (CI only). Each takes 1 to 6 and defaults to 1, which is
+the old behaviour apart from the job names. Retuning one is a one-line change in
+the consumer's `ci.yml`.
+
+- **Vitest and Playwright** use their own `--shard=k/N`. The workflow runs
+  `bun run test:run --shard=k/N` and `bun run e2e --shard=k/N`, so both scripts
+  have to pass extra args through to the tool.
+- **Pytest** has no `--shard`, so the consumer's `conftest.py` needs a hook that
+  reads the env below, keeps its share of whole test modules and writes a report.
+  The keeper then fails the run unless the reports cover every collected module
+  exactly once (`.github/actions/verify-pytest-shards`). A consumer without the
+  hook works at 1 shard; above 1 the verify step fails ("expected N shard
+  reports, found 0"). mygarage's `backend/tests/_shard.py` is the reference hook.
+
+The pytest contract, set on every pytest run in a sharded job (backend and PG):
+
+| Variable | Value |
+|---|---|
+| `PYTEST_SHARD_INDEX` | this runner's shard, 1-based (`matrix.shard`) |
+| `PYTEST_SHARD_COUNT` | number of shards (`strategy.job-total`) |
+| `PYTEST_SHARD_REPORT` | `pytest-shard-report.json`, relative to pytest's rootdir |
+
+The rootdir is `backend/` in both jobs. In the PG job pytest runs in the compose
+service, so the service has to bind-mount `./backend` at its rootdir (mygarage's
+`./backend:/app`); that puts the report at `backend/pytest-shard-report.json`
+on the runner, where the upload step looks for it.
+
+Report, schema 1:
+
+```json
+{
+  "schema": 1,
+  "index": 2,
+  "count": 3,
+  "modules": ["tests/migrations/test_a.py", "..."],
+  "selected": ["tests/migrations/test_b.py", "..."]
+}
+```
+
+`modules` is every collected module in collection order, after `-k`/`-m`
+deselection. `selected` is this shard's share, in the same order. Don't name
+the report as a dotfile: `upload-artifact` skips hidden files.
 
 ### Publish (consumer `.github/workflows/publish.yml`)
 

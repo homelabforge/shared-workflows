@@ -4,8 +4,10 @@ name: Release
 # publishes a GitHub Release built from the matching CHANGELOG.md section.
 #
 # Two gates, mirroring the app repos (which gate `release` on `tests`):
-#   1. ref-lockstep — the internal `_python-react-tests.yml@<ref>` pins in the
-#      CI/publish workflows must equal the tag. A `./` path can't be used (it
+#   1. ref-lockstep: every internal `homelabforge/shared-workflows/...@<ref>`
+#      pin must equal the tag: the `_python-react-tests.yml` calls in the
+#      CI/publish workflows and, since v1.7.0, the verify-pytest-shards action
+#      in the suite and the PG job. A `./` path can't be used (it
 #      startup-fails cross-repo — broke v1.4.0), so the pin must be bumped every
 #      release; forgetting it makes the tag silently ship the OLD suite. This
 #      gate fails the release if the refs drift. (Was release-tag-guard.yml.)
@@ -22,13 +24,13 @@ permissions:
 
 jobs:
   ref-lockstep:
-    name: Internal test-suite ref matches tag
+    name: Internal refs match tag
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Assert _python-react-tests.yml refs equal the pushed tag
+      - name: Assert internal refs equal the pushed tag
         env:
           TAG: ${{ github.ref_name }}
         run: |
@@ -36,23 +38,24 @@ jobs:
           status=0
           for f in \
             .github/workflows/python-react-ci.yml \
-            .github/workflows/python-react-publish.yml; do
-            # Anchor on real `uses:` lines so a comment that happens to
-            # mention the ref can never satisfy (or spoof) the check.
-            refs=$(grep -E '^[[:space:]]*uses:' "$f" \
-              | grep -oE '_python-react-tests\.yml@[^[:space:]]+' \
-              | sed 's/.*@//' || true)
+            .github/workflows/python-react-publish.yml \
+            .github/workflows/_python-react-tests.yml; do
+            # Every `uses:` back into this repo has to name the tag being cut:
+            # the nested test suite and the verify-pytest-shards action alike.
+            # Anchored on real `uses:` lines so a comment can't satisfy it.
+            refs=$(grep -E '^[[:space:]-]*uses:[[:space:]]*homelabforge/shared-workflows/' "$f" \
+              | grep -oE '@[^[:space:]]+' | sed 's/^@//' || true)
             if [ -z "$refs" ]; then
-              echo "::error file=$f::no _python-react-tests.yml@<ref> call found (expected one pinned to $TAG)"
+              echo "::error file=$f::no homelabforge/shared-workflows/...@<ref> found (expected refs pinned to $TAG)"
               status=1
               continue
             fi
             while IFS= read -r ref; do
               if [ "$ref" != "$TAG" ]; then
-                echo "::error file=$f::internal test-suite is pinned to @$ref but this tag is $TAG — bump the @ref to $TAG before tagging"
+                echo "::error file=$f::internal ref is @$ref but this tag is $TAG. Bump it to $TAG before tagging"
                 status=1
               else
-                echo "OK  $f -> _python-react-tests.yml@$ref"
+                echo "OK  $f -> @$ref"
               fi
             done <<< "$refs"
           done
