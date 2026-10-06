@@ -69,11 +69,15 @@ concurrency:
 
 jobs:
   ci:
-    uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.6.0
+    uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.7.0
     with:
       enable-translations: true
       enable-pg-migrations: true           # >=v1.2.0
       security-tripwire-script: .github/scripts/security-tripwire.sh
+      backend-test-shards: 2               # >=v1.7.0, see "Test shards"
+      frontend-test-shards: 3
+      e2e-test-shards: 2
+      pg-migrations-shards: 3
 ```
 
 Production flags (mygarage):
@@ -160,7 +164,7 @@ on:
 
 jobs:
   publish:
-    uses: homelabforge/shared-workflows/.github/workflows/python-react-publish.yml@v1.6.0
+    uses: homelabforge/shared-workflows/.github/workflows/python-react-publish.yml@v1.7.0
     with:
       enable-translations: true
       security-tripwire-script: .github/scripts/security-tripwire.sh
@@ -189,7 +193,7 @@ on:
 
 jobs:
   codeql:
-    uses: homelabforge/shared-workflows/.github/workflows/codeql.yml@v1.6.0
+    uses: homelabforge/shared-workflows/.github/workflows/codeql.yml@v1.7.0
 ```
 
 ### Dependabot Auto-Merge (consumer `.github/workflows/dependabot-auto-merge.yml`)
@@ -202,7 +206,7 @@ on:
 
 jobs:
   auto-merge:
-    uses: homelabforge/shared-workflows/.github/workflows/dependabot-auto-merge.yml@v1.6.0
+    uses: homelabforge/shared-workflows/.github/workflows/dependabot-auto-merge.yml@v1.7.0
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
 ```

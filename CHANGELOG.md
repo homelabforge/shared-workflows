@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-06
+
+Promotes 1.7.0-rc2, canaried on mygarage #214: its CI went from 12m23s to 3m47s and 4m37s on two measured runs.
+
 ## [1.7.0-rc2] - 2026-10-06
 
 ### Fixed
