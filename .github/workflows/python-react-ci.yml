@@ -245,9 +245,10 @@ jobs:
           name: pytest-shard-report-pg-${{ matrix.shard }}
           path: backend/pytest-shard-report.json
           if-no-files-found: error
-          # A "re-run failed jobs" shard uploads the same name again.
+          # A "re-run failed jobs" shard uploads the same name again. The
+          # shards that passed don't, so theirs has to last past a weekend.
           overwrite: true
-          retention-days: 1
+          retention-days: 7
 
       - name: Tear down stack
         if: always()

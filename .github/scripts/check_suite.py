@@ -8,6 +8,8 @@
    uses those names. A skipped job reports Success to branch protection.
 3. Steps call this repo's own actions through `$/`. A consumer that requires
    SHA-pinned actions refuses a tag ref, and `./` means the consumer's checkout.
+   The action has to exist and get exactly the inputs it takes, since actionlint
+   can't check a `$/` ref.
 """
 
 import sys
@@ -115,8 +117,30 @@ def check_action_refs() -> list[str]:
         steps += doc.get("runs", {}).get("steps", [])
         for step in steps:
             uses = str(step.get("uses", ""))
-            if ".github/actions/" in uses and not uses.startswith("$/"):
+            if ".github/actions/" not in uses:
+                continue
+            if not uses.startswith("$/"):
                 problems.append(f"{path}: {uses} has to be $/.github/actions/...")
+                continue
+            # actionlint can't follow `$/` and we mute it there, so check the
+            # action exists and gets the inputs it takes here instead.
+            action = Path(uses[2:]) / "action.yml"
+            if not action.is_file():
+                problems.append(f"{path}: {uses} has no {action}")
+                continue
+            doc_inputs = yaml.safe_load(action.read_text(encoding="utf-8"))
+            inputs = doc_inputs.get("inputs") or {}
+            passed = set(step.get("with") or {})
+            for name in sorted(passed - set(inputs)):
+                problems.append(f"{path}: {uses} doesn't take input {name}")
+            for name, spec in inputs.items():
+                spec = spec or {}
+                if (
+                    spec.get("required")
+                    and "default" not in spec
+                    and name not in passed
+                ):
+                    problems.append(f"{path}: {uses} needs input {name}")
     return problems
 
 

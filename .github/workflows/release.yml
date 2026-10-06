@@ -42,8 +42,9 @@ jobs:
             .github/workflows/_python-react-tests.yml; do
             # Every `uses:` back into this repo has to name the tag being cut.
             # Anchored on real `uses:` lines so a comment can't satisfy it.
-            refs=$(grep -E '^[[:space:]-]*uses:[[:space:]]*homelabforge/shared-workflows/' "$f" \
-              | grep -oE '@[^[:space:]]+' | sed 's/^@//' || true)
+            # Quoted or differently cased refs count too, GitHub resolves those.
+            refs=$(grep -iE "^[[:space:]-]*uses:[[:space:]]*[\"']?homelabforge/shared-workflows/" "$f" \
+              | grep -oE "@[^[:space:]\"']+" | sed 's/^@//' || true)
             # The suite calls nothing back here today; the callers always do.
             if [ -z "$refs" ] && [ "$f" = .github/workflows/_python-react-tests.yml ]; then
               continue

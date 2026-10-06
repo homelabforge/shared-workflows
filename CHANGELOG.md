@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Pytest shard reports are kept 7 days, not 1, so "re-run failed jobs" a day later still finds the ones that passed.
+- `check_suite.py` checks a `$/` action exists and gets the inputs it takes, which actionlint can't.
+- `release.yml`'s ref-lockstep also catches quoted and differently cased internal refs.
+
 ## [1.7.0] - 2026-10-06
 
 Promotes 1.7.0-rc2, canaried on mygarage #214: its CI went from 12m23s to 3m47s and 4m37s on two measured runs.
