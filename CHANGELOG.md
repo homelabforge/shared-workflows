@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0-rc2] - 2026-10-06
+
+### Fixed
+- The shard verify step calls its action through `$/`, so it runs in repos that require SHA-pinned actions (needs runner 2.336.0+).
+
 ## [1.7.0-rc1] - 2026-10-06
 
 ### Added

@@ -5,7 +5,7 @@ name: Reusable Python+React CI
 #
 #   jobs:
 #     ci:
-#       uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.7.0-rc1
+#       uses: homelabforge/shared-workflows/.github/workflows/python-react-ci.yml@v1.7.0-rc2
 #       with:
 #         enable-translations: true
 #         security-tripwire-script: .github/scripts/security-tripwire.sh
@@ -109,7 +109,7 @@ jobs:
     # local path resolves against the CONSUMER repo (which has no such file)
     # when this reusable workflow is called cross-repo, causing a 0s
     # startup_failure. Bump the @ref on every release.
-    uses: homelabforge/shared-workflows/.github/workflows/_python-react-tests.yml@v1.7.0-rc1
+    uses: homelabforge/shared-workflows/.github/workflows/_python-react-tests.yml@v1.7.0-rc2
     with:
       python-version: ${{ inputs.python-version }}
       bun-version-file: ${{ inputs.bun-version-file }}
@@ -281,7 +281,7 @@ jobs:
 
       - name: Every test module ran exactly once
         if: inputs.pg-migrations-shards > 1
-        uses: homelabforge/shared-workflows/.github/actions/verify-pytest-shards@v1.7.0-rc1
+        uses: $/.github/actions/verify-pytest-shards
         with:
           reports-dir: shard-reports
           count: ${{ inputs.pg-migrations-shards }}

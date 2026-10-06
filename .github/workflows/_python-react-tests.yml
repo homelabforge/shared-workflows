@@ -192,7 +192,7 @@ jobs:
 
       - name: Every test module ran exactly once
         if: inputs.backend-test-shards > 1
-        uses: homelabforge/shared-workflows/.github/actions/verify-pytest-shards@v1.7.0-rc1
+        uses: $/.github/actions/verify-pytest-shards
         with:
           reports-dir: shard-reports
           count: ${{ inputs.backend-test-shards }}

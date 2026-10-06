@@ -6,6 +6,8 @@
    breaks on the next tag and nothing notices before then.
 2. The jobs holding required-check names can't be skipped, and no other job
    uses those names. A skipped job reports Success to branch protection.
+3. Steps call this repo's own actions through `$/`. A consumer that requires
+   SHA-pinned actions refuses a tag ref, and `./` means the consumer's checkout.
 """
 
 import sys
@@ -14,6 +16,7 @@ from pathlib import Path
 import yaml
 
 WORKFLOWS = Path(".github/workflows")
+ACTIONS = Path(".github/actions")
 SUITE = "_python-react-tests.yml"
 CALLERS = ("python-react-ci.yml", "python-react-publish.yml")
 # keeper job id -> (required name, jobs it must wait for)
@@ -101,12 +104,30 @@ def check_keepers() -> list[str]:
     return problems
 
 
+def check_action_refs() -> list[str]:
+    problems: list[str] = []
+    files = sorted(WORKFLOWS.glob("*.yml")) + sorted(ACTIONS.glob("*/action.yml"))
+    for path in files:
+        doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        steps = [
+            s for job in doc.get("jobs", {}).values() for s in job.get("steps", [])
+        ]
+        steps += doc.get("runs", {}).get("steps", [])
+        for step in steps:
+            uses = str(step.get("uses", ""))
+            if ".github/actions/" in uses and not uses.startswith("$/"):
+                problems.append(f"{path}: {uses} has to be $/.github/actions/...")
+    return problems
+
+
 def main() -> int:
-    problems = check_plumbing() + check_keepers()
+    problems = check_plumbing() + check_keepers() + check_action_refs()
     for problem in problems:
         print(f"::error::{problem}")
     if not problems:
-        print("OK: suite inputs plumbed through, keepers can't be skipped")
+        print(
+            "OK: suite inputs plumbed through, keepers can't be skipped, own actions via $/"
+        )
     return 1 if problems else 0
 
 
