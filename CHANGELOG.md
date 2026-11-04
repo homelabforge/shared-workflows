@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-11-04
+
+### Changed
+- CodeQL runs on `codeql-action` 4.39.2 (CodeQL 2.27.4, Python 3.15 support).
+- Patch/minor action bumps: setup-python 7.1.0, setup-uv 10.3.3, upload-artifact 7.0.2, download-artifact 8.0.2, setup-node 7.1.0, docker/login-action 4.7.0.
+
 ### Fixed
 - Pytest shard reports are kept 7 days, not 1, so "re-run failed jobs" a day later still finds the ones that passed.
 - `check_suite.py` checks a `$/` action exists and gets the inputs it takes, which actionlint can't.
