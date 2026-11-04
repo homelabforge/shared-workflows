@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-11-04
+
+### Changed
+- This repo's own lint job runs actionlint 1.7.12 (was 1.7.7). Consumers see no change.
+
 ## [1.7.1] - 2026-11-04
 
 ### Changed
