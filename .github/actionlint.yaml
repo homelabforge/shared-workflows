@@ -1,7 +1,7 @@
 # actionlint 1.7.12 and older don't know `$/` refs yet and flag them as a
 # missing ref. check_suite.py makes sure our own actions go through `$/`.
-# scripts/actionlint_ignore_tripwire.sh fails lint once that's fixed, so drop
-# this ignore then.
+# scripts/actionlint_ignore_tripwire.sh reads the pattern below and fails lint
+# once that's fixed, so drop the ignore then.
 paths:
   .github/workflows/**/*.{yml,yaml}:
     ignore:
