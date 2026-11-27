@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.7.3-rc1] - 2026-11-26
+## [1.7.3] - 2026-11-27
 
 ### Changed
 - E2E caches the Playwright browser and the apt packages `install-deps` fetches, so a slow Ubuntu mirror no longer holds a shard for minutes.
