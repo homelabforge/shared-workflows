@@ -375,8 +375,99 @@ jobs:
           cd frontend
           if [ "$GITHUB_ACTOR" = "dependabot[bot]" ]; then bun install; else bun install --frozen-lockfile; fi
 
+      - name: Read Playwright version and runner image
+        id: pw
+        run: |
+          version=$(cd frontend && node -p "require('@playwright/test/package.json').version")
+          # The env context doesn't carry runner machine vars, so read them here.
+          # Without them the apt cache key stops rolling with the image, so say so.
+          for var in ImageOS ImageVersion; do
+            [ -n "${!var:-}" ] || echo "::warning::$var isn't set on this runner, so the Playwright apt cache key won't change with the image"
+          done
+          {
+            echo "version=$version"
+            echo "image-os=${ImageOS:-none}"
+            echo "image-version=${ImageVersion:-none}"
+          } >> "$GITHUB_OUTPUT"
+
+      # Restore and save are split so a red E2E run still saves what it fetched.
+      - name: Restore Playwright browsers
+        id: browsers-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.pw.outputs.version }}
+
+      # Slow Ubuntu mirrors have held a shard 3 to 6 minutes on the font debs,
+      # so keep them. A new image or Playwright saves a fresh entry.
+      - name: Restore Playwright apt packages
+        id: debs-cache
+        if: runner.os == 'Linux'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/playwright-debs
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ steps.pw.outputs.image-os }}-${{ steps.pw.outputs.image-version }}-pwdeps-${{ steps.pw.outputs.version }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-${{ steps.pw.outputs.image-os }}-
+
+      # apt refetches a stale or short deb but trusts one of the right size, so
+      # only seed debs that unpack. Anything left out just gets downloaded.
+      - name: Seed apt with cached packages
+        if: runner.os == 'Linux'
+        run: |
+          good=()
+          for deb in "$HOME"/.cache/playwright-debs/*.deb; do
+            [ -e "$deb" ] || continue
+            if dpkg-deb --info "$deb" > /dev/null 2>&1 && dpkg-deb --fsys-tarfile "$deb" > /dev/null 2>&1; then
+              good+=("$deb")
+            fi
+          done
+          echo "Seeding apt with ${#good[@]} cached debs"
+          if [ "${#good[@]}" -gt 0 ]; then
+            sudo cp "${good[@]}" /var/cache/apt/archives/ \
+              || echo "::warning::Couldn't seed apt from the cache, it'll download everything"
+          fi
+
+      - name: Install Playwright system dependencies
+        run: cd frontend && bunx playwright install-deps chromium
+
+      # Only keep debs at the version that's installed, so old ones don't pile up.
+      - name: Collect apt packages for the cache
+        id: debs-collect
+        if: runner.os == 'Linux' && steps.debs-cache.outputs.cache-hit != 'true'
+        run: |
+          rm -rf "$HOME/.cache/playwright-debs"
+          mkdir -p "$HOME/.cache/playwright-debs"
+          for deb in /var/cache/apt/archives/*.deb; do
+            [ -e "$deb" ] || continue
+            pkg=$(dpkg-deb -f "$deb" Package 2>/dev/null) || continue
+            ver=$(dpkg-deb -f "$deb" Version 2>/dev/null) || continue
+            if dpkg-query -W -f '${Version}\n' "$pkg" 2>/dev/null | grep -qxF "$ver"; then
+              cp "$deb" "$HOME/.cache/playwright-debs/" || true
+            fi
+          done
+          echo "Kept $(find "$HOME/.cache/playwright-debs" -name '*.deb' | wc -l) debs for the cache"
+
+      # Saves only what a finished collect or install left behind. A shard that
+      # loses the save race just logs it, and a save never fails the job.
+      - name: Save Playwright apt packages
+        if: always() && runner.os == 'Linux' && steps.debs-cache.outputs.cache-hit != 'true' && steps.debs-collect.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/playwright-debs
+          key: ${{ steps.debs-cache.outputs.cache-primary-key }}
+
       - name: Install Playwright browsers
-        run: cd frontend && bunx playwright install chromium --with-deps
+        id: browsers-install
+        run: cd frontend && bunx playwright install chromium
+
+      - name: Save Playwright browsers
+        if: always() && steps.browsers-cache.outputs.cache-hit != 'true' && steps.browsers-install.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.browsers-cache.outputs.cache-primary-key }}
 
       - name: Run E2E tests
         run: cd frontend && bun run e2e --shard="$SHARD"

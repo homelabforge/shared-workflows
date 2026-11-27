@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.3-rc1] - 2026-11-26
+
+### Changed
+- E2E caches the Playwright browser and the apt packages `install-deps` fetches, so a slow Ubuntu mirror no longer holds a shard for minutes.
+- This repo's lint job fails once actionlint understands `$/` refs, so the `.github/actionlint.yaml` ignore can't outlive the bug. Consumers see no change.
+
 ## [1.7.2] - 2026-11-04
 
 ### Changed
